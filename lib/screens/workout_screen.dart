@@ -243,24 +243,31 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     return formatPace(seconds);
   }
 
-  String powerStatus(WorkoutStep step, RowingMetrics metrics) {
-    if (step.targetPowerMin == null || step.targetPowerMax == null) {
-      return '';
+  Color powerColor(
+    BuildContext context,
+    WorkoutStep step,
+    RowingMetrics metrics,
+  ) {
+    final min = step.targetPowerMin;
+    final max = step.targetPowerMax;
+
+    if (min == null || max == null || metrics.powerW == 0) {
+      return Theme.of(context).colorScheme.onSurface;
     }
 
-    if (!metrics.rowing || metrics.powerW == 0) {
-      return 'BEREIT';
+    final power = metrics.powerW.toDouble();
+
+    if (power >= min && power <= max) {
+      return Colors.green;
     }
 
-    if (metrics.powerW < step.targetPowerMin!) {
-      return 'LEISTUNG ERHÖHEN';
+    final deviation = power < min ? (min - power) / min : (power - max) / max;
+
+    if (deviation <= 0.05) {
+      return Colors.orange;
     }
 
-    if (metrics.powerW > step.targetPowerMax!) {
-      return 'ETWAS REDUZIEREN';
-    }
-
-    return 'IM ZIELBEREICH';
+    return Colors.red;
   }
 
   String formatPace(int seconds) {
@@ -481,18 +488,14 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                       Text(
                         '${metrics!.powerW} W',
                         textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.displayMedium,
+                        style: Theme.of(context).textTheme.displayMedium
+                            ?.copyWith(
+                              color: powerColor(context, step, metrics!),
+                            ),
                       ),
-
                       if (step.targetPowerMin != null &&
                           step.targetPowerMax != null) ...[
                         const SizedBox(height: 4),
-
-                        Text(
-                          powerStatus(step, metrics!),
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
 
                         const SizedBox(height: 8),
 
