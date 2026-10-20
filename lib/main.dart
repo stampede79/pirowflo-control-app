@@ -457,6 +457,51 @@ class _ControlPageState extends State<ControlPage> {
     }
   }
 
+  Future<void> startWorkout() async {
+    if (todaysWorkout == null) {
+      return;
+    }
+
+    if (!smartRowReady) {
+      final startAnyway = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('SmartRow nicht verbunden'),
+          content: const Text(
+            'SmartRow ist noch nicht vollständig verbunden. '
+            'Das Training kann gestartet werden, aber es stehen '
+            'möglicherweise keine Live-Daten zur Verfügung.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Abbrechen'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Trotzdem starten'),
+            ),
+          ],
+        ),
+      );
+
+      if (startAnyway != true || !mounted) {
+        return;
+      }
+    }
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => WorkoutScreen(
+          workout: todaysWorkout!,
+          server: serverController.text,
+          apiKey: apiKeyController.text,
+        ),
+      ),
+    );
+  }
+
   void showSettings() {
     showDialog(
       context: context,
@@ -492,59 +537,6 @@ class _ControlPageState extends State<ControlPage> {
                   icon: const Icon(Icons.qr_code_scanner),
                   label: const Text('QR-Code scannen'),
                 ),
-                const SizedBox(height: 24),
-                const Divider(),
-                const SizedBox(height: 12),
-
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'Trainingskalender',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                ),
-
-                const SizedBox(height: 12),
-
-                TextField(
-                  controller: calendarUrlController,
-                  decoration: const InputDecoration(labelText: 'CalDAV-URL'),
-                  keyboardType: TextInputType.url,
-                  autocorrect: false,
-                ),
-
-                const SizedBox(height: 12),
-
-                TextField(
-                  controller: nextcloudUserController,
-                  decoration: const InputDecoration(
-                    labelText: 'Nextcloud-Benutzer',
-                  ),
-                  autocorrect: false,
-                ),
-
-                const SizedBox(height: 12),
-
-                TextField(
-                  controller: nextcloudPasswordController,
-                  decoration: const InputDecoration(labelText: 'App-Passwort'),
-                  obscureText: true,
-                  autocorrect: false,
-                ),
-
-                const SizedBox(height: 16),
-
-                OutlinedButton.icon(
-                  onPressed: testNextcloudCalendar,
-                  icon: const Icon(Icons.calendar_month),
-                  label: const Text('Kalender testen'),
-                ),
-
-                if (calendarTestResult != null) ...[
-                  const SizedBox(height: 12),
-                  Text(calendarTestResult!),
-                ],
-
                 const SizedBox(height: 24),
                 const Divider(),
                 const SizedBox(height: 12),
@@ -709,22 +701,40 @@ class _ControlPageState extends State<ControlPage> {
                               Text(
                                 'Dauer: ${todaysWorkout!.totalDuration.inMinutes} Minuten',
                               ),
+                              const SizedBox(height: 16),
+
+                              Row(
+                                children: [
+                                  Icon(
+                                    smartRowReady
+                                        ? Icons.check_circle
+                                        : smartRowConnected
+                                        ? Icons.sync
+                                        : Icons.radio_button_unchecked,
+                                    color: smartRowReady
+                                        ? Colors.green
+                                        : smartRowConnected
+                                        ? Colors.orange
+                                        : Colors.grey,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Text(
+                                    smartRowReady
+                                        ? 'SmartRow verbunden'
+                                        : smartRowConnected
+                                        ? 'SmartRow wird verbunden …'
+                                        : 'SmartRow nicht verbunden',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium,
+                                  ),
+                                ],
+                              ),
                               const SizedBox(height: 20),
                               SizedBox(
                                 width: double.infinity,
                                 child: FilledButton.icon(
-                                  onPressed: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => WorkoutScreen(
-                                          workout: todaysWorkout!,
-                                          server: serverController.text,
-                                          apiKey: apiKeyController.text,
-                                        ),
-                                      ),
-                                    );
-                                  },
+                                  onPressed: startWorkout,
                                   icon: const Icon(Icons.fitness_center),
                                   label: const Text('Training starten'),
                                 ),

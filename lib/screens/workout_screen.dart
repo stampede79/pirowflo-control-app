@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
+import 'package:audioplayers/audioplayers.dart';
 
 import '../models/workout.dart';
 
@@ -26,6 +28,9 @@ class WorkoutScreen extends StatefulWidget {
 class _WorkoutScreenState extends State<WorkoutScreen> {
   Timer? timer;
   Timer? metricsTimer;
+
+  final AudioPlayer audioPlayer = AudioPlayer();
+
   RowingMetrics? metrics;
   String? metricsError;
 
@@ -40,6 +45,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   @override
   void initState() {
     super.initState();
+    WakelockPlus.enable();
     remaining = currentStep.duration;
     loadMetrics();
 
@@ -53,7 +59,32 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   void dispose() {
     timer?.cancel();
     super.dispose();
+    audioPlayer.dispose();
     metricsTimer?.cancel();
+    WakelockPlus.disable();
+  }
+
+  Future<void> playCountdownSignal() async {
+    await audioPlayer.stop();
+    await audioPlayer.play(AssetSource('sounds/countdown.wav'));
+  }
+
+  Future<void> playStepChangeSignal(WorkoutStepType type) async {
+    await audioPlayer.stop();
+
+    final sound = switch (type) {
+      WorkoutStepType.work => 'sounds/work.wav',
+      WorkoutStepType.recovery => 'sounds/recovery.wav',
+      WorkoutStepType.cooldown => 'sounds/recovery.wav',
+      WorkoutStepType.warmup => 'sounds/recovery.wav',
+    };
+
+    await audioPlayer.play(AssetSource(sound));
+  }
+
+  Future<void> playFinishedSignal() async {
+    await audioPlayer.stop();
+    await audioPlayer.play(AssetSource('sounds/finished.wav'));
   }
 
   void start() {
@@ -83,16 +114,25 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       setState(() {
         remaining -= const Duration(seconds: 1);
       });
+
+      if (remaining.inSeconds <= 3) {
+        playCountdownSignal();
+      }
+
       return;
     }
 
-    nextStep();
+    nextStep(playSound: true);
   }
 
-  void nextStep() {
+  void nextStep({bool playSound = false}) {
     timer?.cancel();
 
     if (currentStepIndex >= widget.workout.steps.length - 1) {
+      if (playSound) {
+        playFinishedSignal();
+      }
+
       setState(() {
         remaining = Duration.zero;
         running = false;
@@ -106,6 +146,10 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       currentStepIndex++;
       remaining = currentStep.duration;
     });
+
+    if (playSound) {
+      playStepChangeSignal(currentStep.type);
+    }
 
     if (running) {
       timer = Timer.periodic(const Duration(seconds: 1), (_) => tick());
@@ -131,6 +175,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       if (!mounted) return;
 
       setState(() {
+        metrics = null;
         metricsError = 'Keine Live-Daten';
       });
     }
@@ -187,6 +232,26 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     };
   }
 
+  Widget liveStatus(BuildContext context) {
+    final isLive = metrics != null && metricsError == null;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          isLive ? Icons.circle : Icons.circle_outlined,
+          size: 12,
+          color: isLive ? Colors.green : Colors.grey,
+        ),
+        const SizedBox(width: 6),
+        Text(
+          isLive ? 'LIVE' : 'SmartRow offline',
+          style: Theme.of(context).textTheme.labelLarge,
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final step = currentStep;
@@ -200,7 +265,15 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         : null;
 
     return Scaffold(
-      appBar: AppBar(title: Text(widget.workout.name)),
+      appBar: AppBar(
+        title: Text(widget.workout.name),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: Center(child: liveStatus(context)),
+          ),
+        ],
+      ),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -334,7 +407,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
               const SizedBox(height: 12),
               if (!finished)
                 OutlinedButton.icon(
-                  onPressed: nextStep,
+                  onPressed: () => nextStep(),
                   icon: const Icon(Icons.skip_next),
                   label: const Text('Abschnitt überspringen'),
                 ),
