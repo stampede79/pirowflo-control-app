@@ -8,6 +8,8 @@ import '../models/workout.dart';
 
 import '../models/rowing_metrics.dart';
 import '../services/metrics_service.dart';
+import '../models/workout_step_result.dart';
+import '../services/workout_step_recorder.dart';
 
 class WorkoutScreen extends StatefulWidget {
   final Workout workout;
@@ -34,6 +36,9 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   RowingMetrics? metrics;
   String? metricsError;
 
+  late WorkoutStepRecorder stepRecorder;
+  final List<WorkoutStepResult> stepResults = [];
+
   int currentStepIndex = 0;
   late Duration remaining;
 
@@ -42,11 +47,38 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
   WorkoutStep get currentStep => widget.workout.steps[currentStepIndex];
 
+  String resultPace(double seconds) {
+    if (seconds <= 0) {
+      return '--:--';
+    }
+
+    return formatPace(seconds.round());
+  }
+
+  String resultPower(double watts) {
+    if (watts <= 0) {
+      return '--';
+    }
+
+    return watts.round().toString();
+  }
+
+  String resultSpm(double spm) {
+    if (spm <= 0) {
+      return '--';
+    }
+
+    return spm.toStringAsFixed(0);
+  }
+
   @override
   void initState() {
     super.initState();
     WakelockPlus.enable();
     remaining = currentStep.duration;
+
+    stepRecorder = WorkoutStepRecorder(currentStep);
+
     loadMetrics();
 
     metricsTimer = Timer.periodic(
@@ -58,10 +90,12 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   @override
   void dispose() {
     timer?.cancel();
-    super.dispose();
-    audioPlayer.dispose();
     metricsTimer?.cancel();
+
+    audioPlayer.dispose();
     WakelockPlus.disable();
+
+    super.dispose();
   }
 
   Future<void> playCountdownSignal() async {
@@ -125,8 +159,16 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     nextStep(playSound: true);
   }
 
+  void finishCurrentStep() {
+    final completedDuration = currentStep.duration - remaining;
+
+    stepResults.add(stepRecorder.finish(completedDuration));
+  }
+
   void nextStep({bool playSound = false}) {
     timer?.cancel();
+
+    finishCurrentStep();
 
     if (currentStepIndex >= widget.workout.steps.length - 1) {
       if (playSound) {
@@ -145,6 +187,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     setState(() {
       currentStepIndex++;
       remaining = currentStep.duration;
+      stepRecorder = WorkoutStepRecorder(currentStep);
     });
 
     if (playSound) {
@@ -166,6 +209,10 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       final result = await service.getMetrics();
 
       if (!mounted) return;
+
+      if (running && result.smartRowReady) {
+        stepRecorder.addSample(result);
+      }
 
       setState(() {
         metrics = result;
@@ -233,7 +280,18 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   }
 
   Widget liveStatus(BuildContext context) {
-    final isLive = metrics != null && metricsError == null;
+    final isLive =
+        metrics != null && metricsError == null && metrics!.smartRowReady;
+
+    final statusText = metricsError != null
+        ? 'Keine Verbindung'
+        : metrics == null
+        ? 'Verbinde …'
+        : metrics!.smartRowReady
+        ? 'LIVE'
+        : metrics!.smartRowConnected
+        ? 'SmartRow verbindet …'
+        : 'SmartRow offline';
 
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -244,11 +302,125 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
           color: isLive ? Colors.green : Colors.grey,
         ),
         const SizedBox(width: 6),
-        Text(
-          isLive ? 'LIVE' : 'SmartRow offline',
-          style: Theme.of(context).textTheme.labelLarge,
-        ),
+        Text(statusText, style: Theme.of(context).textTheme.labelLarge),
       ],
+    );
+  }
+
+  Widget stepResultCard(BuildContext context, WorkoutStepResult result) {
+    final targetPercentage = result.targetPercentage;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              result.step.title,
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              stepTypeLabel(result.step.type),
+              style: Theme.of(context).textTheme.labelLarge,
+            ),
+            const SizedBox(height: 16),
+
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Dauer'),
+                Text(formatDuration(result.duration)),
+              ],
+            ),
+            const SizedBox(height: 8),
+
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Ø Leistung'),
+                Text('${resultPower(result.averagePowerW)} W'),
+              ],
+            ),
+            const SizedBox(height: 8),
+
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Ø Schlagrate'),
+                Text('${resultSpm(result.averageStrokeRateSpm)} SPM'),
+              ],
+            ),
+            const SizedBox(height: 8),
+
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Ø Pace'),
+                Text('${resultPace(result.averagePace500mSeconds)} /500 m'),
+              ],
+            ),
+            const SizedBox(height: 8),
+
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [const Text('Distanz'), Text('${result.distanceM} m')],
+            ),
+
+            if (targetPercentage != null) ...[
+              const SizedBox(height: 12),
+              const Divider(),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Im Zielbereich'),
+                  Text(
+                    '${targetPercentage.toStringAsFixed(0)} %',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget workoutResults(BuildContext context) {
+    return SafeArea(
+      child: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          Text(
+            'Training abgeschlossen',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.headlineMedium,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            widget.workout.name,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 24),
+
+          for (final result in stepResults) ...[
+            stepResultCard(context, result),
+            const SizedBox(height: 12),
+          ],
+
+          const SizedBox(height: 12),
+
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(context),
+            icon: const Icon(Icons.check),
+            label: const Text('Training beenden'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -274,153 +446,164 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
           ),
         ],
       ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                stepTypeLabel(step.type),
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                step.title,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
-              const Spacer(),
-              Text(
-                finished ? 'FERTIG' : formatDuration(remaining),
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.displayLarge,
-              ),
-              const SizedBox(height: 24),
-              LinearProgressIndicator(
-                value: finished ? 1 : progress.clamp(0.0, 1.0),
-                minHeight: 12,
-              ),
-              const SizedBox(height: 32),
-              if (metrics != null) ...[
-                Text(
-                  '${metrics!.powerW} W',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.displayMedium,
-                ),
-
-                if (step.targetPowerMin != null &&
-                    step.targetPowerMax != null) ...[
-                  const SizedBox(height: 4),
-
-                  Text(
-                    powerStatus(step, metrics!),
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-
-                  const SizedBox(height: 8),
-
-                  Text(
-                    'Ziel: ${step.targetPowerMin}–${step.targetPowerMax} W',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                ],
-
-                const SizedBox(height: 20),
-
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      body: finished
+          ? workoutResults(context)
+          : SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Column(
-                      children: [
-                        Text(
-                          metrics!.strokeRateSpm.toStringAsFixed(0),
-                          style: Theme.of(context).textTheme.headlineSmall,
-                        ),
-                        const Text('SPM'),
-                      ],
+                    Text(
+                      stepTypeLabel(step.type),
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.titleLarge,
                     ),
-                    Column(
-                      children: [
-                        Text(
-                          livePace(metrics!.pace500mSeconds),
-                          style: Theme.of(context).textTheme.headlineSmall,
-                        ),
-                        const Text('/500 m'),
-                      ],
+                    const SizedBox(height: 8),
+                    Text(
+                      step.title,
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.headlineSmall,
                     ),
-                    Column(
-                      children: [
-                        Text(
-                          '${metrics!.distanceM}',
-                          style: Theme.of(context).textTheme.headlineSmall,
-                        ),
-                        const Text('Meter'),
-                      ],
+                    const Spacer(),
+                    Text(
+                      finished ? 'FERTIG' : formatDuration(remaining),
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.displayLarge,
                     ),
+                    const SizedBox(height: 24),
+                    LinearProgressIndicator(
+                      value: finished ? 1 : progress.clamp(0.0, 1.0),
+                      minHeight: 12,
+                    ),
+                    const SizedBox(height: 32),
+                    if (metrics != null) ...[
+                      Text(
+                        '${metrics!.powerW} W',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.displayMedium,
+                      ),
+
+                      if (step.targetPowerMin != null &&
+                          step.targetPowerMax != null) ...[
+                        const SizedBox(height: 4),
+
+                        Text(
+                          powerStatus(step, metrics!),
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+
+                        const SizedBox(height: 8),
+
+                        Text(
+                          'Ziel: ${step.targetPowerMin}–${step.targetPowerMax} W',
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                      ],
+
+                      const SizedBox(height: 20),
+
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          Column(
+                            children: [
+                              Text(
+                                metrics!.strokeRateSpm.toStringAsFixed(0),
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .headlineSmall,
+                              ),
+                              const Text('SPM'),
+                            ],
+                          ),
+                          Column(
+                            children: [
+                              Text(
+                                livePace(metrics!.pace500mSeconds),
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .headlineSmall,
+                              ),
+                              const Text('/500 m'),
+                            ],
+                          ),
+                          Column(
+                            children: [
+                              Text(
+                                '${metrics!.distanceM}',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .headlineSmall,
+                              ),
+                              const Text('Meter'),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ] else ...[
+                      const Center(child: CircularProgressIndicator()),
+                    ],
+                    if (metricsError != null) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        metricsError!,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                    ],
+                    if (step.hasTargetPace)
+                      Text(
+                        'Zielpace: '
+                        '${formatPace(step.targetPaceMinSeconds!)}–'
+                        '${formatPace(step.targetPaceMaxSeconds!)} /500 m',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                    if (step.targetSpmMin != null &&
+                        step.targetSpmMax != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Schlagrate: '
+                        '${step.targetSpmMin}–${step.targetSpmMax} SPM',
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                    const Spacer(),
+                    if (upcomingStep != null && !finished)
+                      Text(
+                        'Danach: ${upcomingStep.title} '
+                        '(${formatDuration(upcomingStep.duration)})',
+                        textAlign: TextAlign.center,
+                      ),
+                    const SizedBox(height: 24),
+                    if (!finished)
+                      FilledButton.icon(
+                        onPressed: running ? pause : start,
+                        icon: Icon(running ? Icons.pause : Icons.play_arrow),
+                        label: Text(running ? 'Pause' : 'Start / Fortsetzen'),
+                      ),
+                    const SizedBox(height: 12),
+                    if (!finished)
+                      OutlinedButton.icon(
+                        onPressed: () => nextStep(),
+                        icon: const Icon(Icons.skip_next),
+                        label: const Text('Abschnitt überspringen'),
+                      ),
+                    if (finished)
+                      FilledButton.icon(
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.check),
+                        label: const Text('Training beenden'),
+                      ),
                   ],
                 ),
-              ] else ...[
-                const Center(child: CircularProgressIndicator()),
-              ],
-              if (metricsError != null) ...[
-                const SizedBox(height: 12),
-                Text(
-                  metricsError!,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                ),
-              ],
-              if (step.hasTargetPace)
-                Text(
-                  'Zielpace: '
-                  '${formatPace(step.targetPaceMinSeconds!)}–'
-                  '${formatPace(step.targetPaceMaxSeconds!)} /500 m',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-              if (step.targetSpmMin != null && step.targetSpmMax != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  'Schlagrate: '
-                  '${step.targetSpmMin}–${step.targetSpmMax} SPM',
-                  textAlign: TextAlign.center,
-                ),
-              ],
-              const Spacer(),
-              if (upcomingStep != null && !finished)
-                Text(
-                  'Danach: ${upcomingStep.title} '
-                  '(${formatDuration(upcomingStep.duration)})',
-                  textAlign: TextAlign.center,
-                ),
-              const SizedBox(height: 24),
-              if (!finished)
-                FilledButton.icon(
-                  onPressed: running ? pause : start,
-                  icon: Icon(running ? Icons.pause : Icons.play_arrow),
-                  label: Text(running ? 'Pause' : 'Start / Fortsetzen'),
-                ),
-              const SizedBox(height: 12),
-              if (!finished)
-                OutlinedButton.icon(
-                  onPressed: () => nextStep(),
-                  icon: const Icon(Icons.skip_next),
-                  label: const Text('Abschnitt überspringen'),
-                ),
-              if (finished)
-                FilledButton.icon(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.check),
-                  label: const Text('Training beenden'),
-                ),
-            ],
-          ),
-        ),
-      ),
+              ),
+            ),
     );
   }
 }

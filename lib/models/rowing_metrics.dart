@@ -1,4 +1,6 @@
 class RowingMetrics {
+  final bool smartRowConnected;
+  final bool smartRowReady;
   final bool rowing;
   final int powerW;
   final double strokeRateSpm;
@@ -10,6 +12,8 @@ class RowingMetrics {
   final int averagePace500mSeconds;
 
   const RowingMetrics({
+    required this.smartRowConnected,
+    required this.smartRowReady,
     required this.rowing,
     required this.powerW,
     required this.strokeRateSpm,
@@ -23,6 +27,8 @@ class RowingMetrics {
 
   factory RowingMetrics.fromJson(Map<String, dynamic> json) {
     return RowingMetrics(
+      smartRowConnected: json['smartrow_connected'] == true,
+      smartRowReady: json['smartrow_ready'] == true,
       rowing: json['rowing'] == true,
       powerW: (json['power_w'] as num?)?.toInt() ?? 0,
       strokeRateSpm: (json['stroke_rate_spm'] as num?)?.toDouble() ?? 0,
