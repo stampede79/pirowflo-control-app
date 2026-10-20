@@ -719,6 +719,8 @@ class _ControlPageState extends State<ControlPage> {
                                       MaterialPageRoute(
                                         builder: (_) => WorkoutScreen(
                                           workout: todaysWorkout!,
+                                          server: serverController.text,
+                                          apiKey: apiKeyController.text,
                                         ),
                                       ),
                                     );

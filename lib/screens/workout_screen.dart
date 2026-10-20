@@ -4,10 +4,20 @@ import 'package:flutter/material.dart';
 
 import '../models/workout.dart';
 
+import '../models/rowing_metrics.dart';
+import '../services/metrics_service.dart';
+
 class WorkoutScreen extends StatefulWidget {
   final Workout workout;
+  final String server;
+  final String apiKey;
 
-  const WorkoutScreen({super.key, required this.workout});
+  const WorkoutScreen({
+    super.key,
+    required this.workout,
+    required this.server,
+    required this.apiKey,
+  });
 
   @override
   State<WorkoutScreen> createState() => _WorkoutScreenState();
@@ -15,6 +25,9 @@ class WorkoutScreen extends StatefulWidget {
 
 class _WorkoutScreenState extends State<WorkoutScreen> {
   Timer? timer;
+  Timer? metricsTimer;
+  RowingMetrics? metrics;
+  String? metricsError;
 
   int currentStepIndex = 0;
   late Duration remaining;
@@ -28,12 +41,19 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   void initState() {
     super.initState();
     remaining = currentStep.duration;
+    loadMetrics();
+
+    metricsTimer = Timer.periodic(
+      const Duration(milliseconds: 500),
+      (_) => loadMetrics(),
+    );
   }
 
   @override
   void dispose() {
     timer?.cancel();
     super.dispose();
+    metricsTimer?.cancel();
   }
 
   void start() {
@@ -92,11 +112,63 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     }
   }
 
+  Future<void> loadMetrics() async {
+    try {
+      final service = MetricsService(
+        server: widget.server,
+        apiKey: widget.apiKey,
+      );
+
+      final result = await service.getMetrics();
+
+      if (!mounted) return;
+
+      setState(() {
+        metrics = result;
+        metricsError = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        metricsError = 'Keine Live-Daten';
+      });
+    }
+  }
+
   String formatDuration(Duration duration) {
     final minutes = duration.inMinutes;
     final seconds = duration.inSeconds.remainder(60);
 
     return '$minutes:${seconds.toString().padLeft(2, '0')}';
+  }
+
+  String livePace(int seconds) {
+    if (seconds <= 0) {
+      return '--:--';
+    }
+
+    return formatPace(seconds);
+  }
+
+  String powerStatus(WorkoutStep step, RowingMetrics metrics) {
+    if (step.targetPowerMin == null || step.targetPowerMax == null) {
+      return '';
+    }
+
+    if (!metrics.rowing || metrics.powerW == 0) {
+      return 'BEREIT';
+    }
+
+    if (metrics.powerW < step.targetPowerMin!) {
+      return 'LEISTUNG ERHÖHEN';
+    }
+
+    if (metrics.powerW > step.targetPowerMax!) {
+      return 'ETWAS REDUZIEREN';
+    }
+
+    return 'IM ZIELBEREICH';
   }
 
   String formatPace(int seconds) {
@@ -158,12 +230,77 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                 minHeight: 12,
               ),
               const SizedBox(height: 32),
-              if (step.targetPowerMin != null && step.targetPowerMax != null)
+              if (metrics != null) ...[
                 Text(
-                  '${step.targetPowerMin}–${step.targetPowerMax} W',
+                  '${metrics!.powerW} W',
                   textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.headlineMedium,
+                  style: Theme.of(context).textTheme.displayMedium,
                 ),
+
+                if (step.targetPowerMin != null &&
+                    step.targetPowerMax != null) ...[
+                  const SizedBox(height: 4),
+
+                  Text(
+                    powerStatus(step, metrics!),
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  Text(
+                    'Ziel: ${step.targetPowerMin}–${step.targetPowerMax} W',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ],
+
+                const SizedBox(height: 20),
+
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    Column(
+                      children: [
+                        Text(
+                          metrics!.strokeRateSpm.toStringAsFixed(0),
+                          style: Theme.of(context).textTheme.headlineSmall,
+                        ),
+                        const Text('SPM'),
+                      ],
+                    ),
+                    Column(
+                      children: [
+                        Text(
+                          livePace(metrics!.pace500mSeconds),
+                          style: Theme.of(context).textTheme.headlineSmall,
+                        ),
+                        const Text('/500 m'),
+                      ],
+                    ),
+                    Column(
+                      children: [
+                        Text(
+                          '${metrics!.distanceM}',
+                          style: Theme.of(context).textTheme.headlineSmall,
+                        ),
+                        const Text('Meter'),
+                      ],
+                    ),
+                  ],
+                ),
+              ] else ...[
+                const Center(child: CircularProgressIndicator()),
+              ],
+              if (metricsError != null) ...[
+                const SizedBox(height: 12),
+                Text(
+                  metricsError!,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ],
               if (step.hasTargetPace)
                 Text(
                   'Zielpace: '
