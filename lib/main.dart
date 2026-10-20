@@ -6,6 +6,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 
+import 'screens/workout_screen.dart';
+import 'models/workout.dart';
+import 'services/workout_parser.dart';
+
+import 'services/nextcloud_calendar_service.dart';
+
 void main() {
   runApp(const PiRowFloApp());
 }
@@ -42,6 +48,13 @@ class _ControlPageState extends State<ControlPage> {
 
   final serverController = TextEditingController();
   final apiKeyController = TextEditingController();
+  final calendarUrlController = TextEditingController(
+    text: 'https://cloud.roderwieser.com/remote.php/dav/calendars/admin/rudertraining/',
+  );
+  final nextcloudUserController = TextEditingController();
+  final nextcloudPasswordController = TextEditingController();
+
+  String? calendarTestResult;
 
   bool loading = false;
   bool configured = false;
@@ -61,6 +74,10 @@ class _ControlPageState extends State<ControlPage> {
 
   Timer? statusTimer;
 
+  Workout? todaysWorkout;
+  bool calendarLoading = false;
+  String? calendarError;
+
   @override
   void initState() {
     super.initState();
@@ -73,16 +90,28 @@ class _ControlPageState extends State<ControlPage> {
     serverController.dispose();
     apiKeyController.dispose();
     super.dispose();
+    calendarUrlController.dispose();
+    nextcloudUserController.dispose();
+    nextcloudPasswordController.dispose();
   }
 
   Future<void> loadConfiguration() async {
     final server = await storage.read(key: 'server');
     final apiKey = await storage.read(key: 'apiKey');
+    final calendarUrl = await storage.read(key: 'calendarUrl');
+    final nextcloudUser = await storage.read(key: 'nextcloudUser');
+    final nextcloudPassword = await storage.read(key: 'nextcloudPassword');
 
     if (!mounted) return;
 
     serverController.text = server ?? '';
     apiKeyController.text = apiKey ?? '';
+    if (calendarUrl != null && calendarUrl.isNotEmpty) {
+      calendarUrlController.text = calendarUrl;
+    }
+
+    nextcloudUserController.text = nextcloudUser ?? '';
+    nextcloudPasswordController.text = nextcloudPassword ?? '';
 
     setState(() {
       configured =
@@ -95,6 +124,7 @@ class _ControlPageState extends State<ControlPage> {
     } else {
       statusTimer?.cancel();
     }
+    await loadTodaysWorkout();
   }
 
   Future<void> saveConfiguration() async {
@@ -110,6 +140,21 @@ class _ControlPageState extends State<ControlPage> {
 
     await storage.write(key: 'apiKey', value: apiKeyController.text.trim());
 
+    await storage.write(
+      key: 'calendarUrl',
+      value: calendarUrlController.text.trim(),
+    );
+
+    await storage.write(
+      key: 'nextcloudUser',
+      value: nextcloudUserController.text.trim(),
+    );
+
+    await storage.write(
+      key: 'nextcloudPassword',
+      value: nextcloudPasswordController.text,
+    );
+
     if (!mounted) return;
 
     setState(() {
@@ -123,6 +168,7 @@ class _ControlPageState extends State<ControlPage> {
     } else {
       statusTimer?.cancel();
     }
+    await loadTodaysWorkout();
   }
 
   Map<String, String> get headers => {
@@ -310,42 +356,249 @@ class _ControlPageState extends State<ControlPage> {
     await saveConfiguration();
   }
 
+  Future<void> testNextcloudCalendar() async {
+    final calendarUrl = calendarUrlController.text.trim();
+    final username = nextcloudUserController.text.trim();
+    final password = nextcloudPasswordController.text;
+
+    if (calendarUrl.isEmpty || username.isEmpty || password.isEmpty) {
+      setState(() {
+        calendarTestResult = 'Nextcloud-Konfiguration unvollständig';
+      });
+      return;
+    }
+
+    setState(() {
+      calendarTestResult = 'Kalender wird geprüft …';
+    });
+
+    try {
+      final service = NextcloudCalendarService(
+        calendarUrl: calendarUrl,
+        username: username,
+        appPassword: password,
+      );
+
+      final events = await service.getEventsForDay(DateTime.now());
+
+      if (!mounted) return;
+
+      setState(() {
+        if (events.isEmpty) {
+          calendarTestResult = 'Verbindung erfolgreich – heute kein Termin';
+        } else {
+          calendarTestResult =
+              'Verbindung erfolgreich – heute: ${events.first.summary}';
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        calendarTestResult = 'Kalenderfehler: $e';
+      });
+    }
+  }
+
+  Future<void> loadTodaysWorkout() async {
+    final calendarUrl = calendarUrlController.text.trim();
+    final username = nextcloudUserController.text.trim();
+    final password = nextcloudPasswordController.text;
+
+    if (calendarUrl.isEmpty || username.isEmpty || password.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      calendarLoading = true;
+      calendarError = null;
+    });
+
+    try {
+      final service = NextcloudCalendarService(
+        calendarUrl: calendarUrl,
+        username: username,
+        appPassword: password,
+      );
+
+      final events = await service.getEventsForDay(DateTime.now());
+
+      Workout? foundWorkout;
+
+      for (final event in events) {
+        final workout = WorkoutParser.parse(
+          name: event.summary,
+          description: event.description,
+        );
+
+        if (workout != null) {
+          foundWorkout = workout;
+          break;
+        }
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        todaysWorkout = foundWorkout;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        calendarError = 'Trainingskalender nicht erreichbar: $e';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          calendarLoading = false;
+        });
+      }
+    }
+  }
+
   void showSettings() {
     showDialog(
       context: context,
       builder: (context) {
         return AlertDialog(
           title: const Text('Verbindung'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: serverController,
-                decoration: const InputDecoration(
-                  labelText: 'Server',
-                  hintText: 'http://192.168.178.xxx:8090',
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: serverController,
+                  decoration: const InputDecoration(
+                    labelText: 'Server',
+                    hintText: 'http://192.168.178.xxx:8090',
+                  ),
+                  keyboardType: TextInputType.url,
+                  autocorrect: false,
                 ),
-                keyboardType: TextInputType.url,
-                autocorrect: false,
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: apiKeyController,
-                decoration: const InputDecoration(labelText: 'API-Key'),
-                obscureText: true,
-                autocorrect: false,
-              ),
-              // NEU: QR-Code scannen
-              const SizedBox(height: 20),
-              OutlinedButton.icon(
-                onPressed: () {
-                  Navigator.pop(context);
-                  scanConfiguration();
-                },
-                icon: const Icon(Icons.qr_code_scanner),
-                label: const Text('QR-Code scannen'),
-              ),
-            ],
+                const SizedBox(height: 16),
+                TextField(
+                  controller: apiKeyController,
+                  decoration: const InputDecoration(labelText: 'API-Key'),
+                  obscureText: true,
+                  autocorrect: false,
+                ),
+                const SizedBox(height: 20),
+                OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    scanConfiguration();
+                  },
+                  icon: const Icon(Icons.qr_code_scanner),
+                  label: const Text('QR-Code scannen'),
+                ),
+                const SizedBox(height: 24),
+                const Divider(),
+                const SizedBox(height: 12),
+
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Trainingskalender',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+
+                const SizedBox(height: 12),
+
+                TextField(
+                  controller: calendarUrlController,
+                  decoration: const InputDecoration(labelText: 'CalDAV-URL'),
+                  keyboardType: TextInputType.url,
+                  autocorrect: false,
+                ),
+
+                const SizedBox(height: 12),
+
+                TextField(
+                  controller: nextcloudUserController,
+                  decoration: const InputDecoration(
+                    labelText: 'Nextcloud-Benutzer',
+                  ),
+                  autocorrect: false,
+                ),
+
+                const SizedBox(height: 12),
+
+                TextField(
+                  controller: nextcloudPasswordController,
+                  decoration: const InputDecoration(labelText: 'App-Passwort'),
+                  obscureText: true,
+                  autocorrect: false,
+                ),
+
+                const SizedBox(height: 16),
+
+                OutlinedButton.icon(
+                  onPressed: testNextcloudCalendar,
+                  icon: const Icon(Icons.calendar_month),
+                  label: const Text('Kalender testen'),
+                ),
+
+                if (calendarTestResult != null) ...[
+                  const SizedBox(height: 12),
+                  Text(calendarTestResult!),
+                ],
+
+                const SizedBox(height: 24),
+                const Divider(),
+                const SizedBox(height: 12),
+
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Trainingskalender',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+
+                const SizedBox(height: 12),
+
+                TextField(
+                  controller: calendarUrlController,
+                  decoration: const InputDecoration(labelText: 'CalDAV-URL'),
+                  keyboardType: TextInputType.url,
+                  autocorrect: false,
+                ),
+
+                const SizedBox(height: 12),
+
+                TextField(
+                  controller: nextcloudUserController,
+                  decoration: const InputDecoration(
+                    labelText: 'Nextcloud-Benutzer',
+                  ),
+                  autocorrect: false,
+                ),
+
+                const SizedBox(height: 12),
+
+                TextField(
+                  controller: nextcloudPasswordController,
+                  decoration: const InputDecoration(labelText: 'App-Passwort'),
+                  obscureText: true,
+                  autocorrect: false,
+                ),
+
+                const SizedBox(height: 16),
+
+                OutlinedButton.icon(
+                  onPressed: testNextcloudCalendar,
+                  icon: const Icon(Icons.calendar_month),
+                  label: const Text('Kalender testen'),
+                ),
+
+                if (calendarTestResult != null) ...[
+                  const SizedBox(height: 12),
+                  Text(calendarTestResult!),
+                ],
+              ],
+            ),
           ),
           actions: [
             TextButton(
@@ -396,51 +649,90 @@ class _ControlPageState extends State<ControlPage> {
                 )
               : ListView(
                   children: [
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(20),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              running ? 'PiRowFlo läuft' : 'PiRowFlo gestoppt',
-                              style: Theme.of(context).textTheme.headlineSmall,
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Modus: $activeMode',
-                              style: Theme.of(context).textTheme.titleMedium,
-                            ),
-                            const SizedBox(height: 20),
-                            Row(
-                              children: [
-                                Icon(
-                                  smartRowReady
-                                      ? Icons.check_circle
-                                      : smartRowConnected
-                                      ? Icons.sync
-                                      : Icons.radio_button_unchecked,
+                    if (calendarLoading)
+                      const Card(
+                        child: Padding(
+                          padding: EdgeInsets.all(20),
+                          child: Row(
+                            children: [
+                              SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
                                 ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Text(
-                                    smartRowReady
-                                        ? 'SmartRow verbunden'
-                                        : smartRowConnected
-                                        ? 'SmartRow wird verbunden …'
-                                        : 'SmartRow nicht verbunden',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleMedium,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
+                              ),
+                              SizedBox(width: 16),
+                              Text('Trainingsplan wird geladen …'),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
+
+                    if (calendarError != null)
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Text(
+                            calendarError!,
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.error,
+                            ),
+                          ),
+                        ),
+                      ),
+
+                    if (todaysWorkout != null) ...[
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(20),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Heutiges Training',
+                                style: Theme.of(context).textTheme.labelLarge,
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                todaysWorkout!.name,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .headlineSmall,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                todaysWorkout!.description,
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Dauer: ${todaysWorkout!.totalDuration.inMinutes} Minuten',
+                              ),
+                              const SizedBox(height: 20),
+                              SizedBox(
+                                width: double.infinity,
+                                child: FilledButton.icon(
+                                  onPressed: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => WorkoutScreen(
+                                          workout: todaysWorkout!,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  icon: const Icon(Icons.fitness_center),
+                                  label: const Text('Training starten'),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
                     statusRow('BLE + ANT+', states['combined'] ?? 'UNKNOWN'),
                     statusRow('Bluetooth', states['bluetooth'] ?? 'UNKNOWN'),
                     statusRow('ANT+', states['ant'] ?? 'UNKNOWN'),
