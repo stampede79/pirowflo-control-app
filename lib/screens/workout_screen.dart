@@ -396,6 +396,151 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     );
   }
 
+  Duration get totalResultDuration {
+    return stepResults.fold(
+      Duration.zero,
+      (total, result) => total + result.duration,
+    );
+  }
+
+  int get totalResultDistance {
+    return stepResults.fold(0, (total, result) => total + result.distanceM);
+  }
+
+  double get totalAveragePower {
+    var sum = 0.0;
+    var samples = 0;
+
+    for (final result in stepResults) {
+      sum += result.averagePowerW * result.activePowerSamples;
+      samples += result.activePowerSamples;
+    }
+
+    return samples == 0 ? 0 : sum / samples;
+  }
+
+  double get totalAverageStrokeRate {
+    var weightedSum = 0.0;
+    var weight = 0;
+
+    for (final result in stepResults) {
+      if (result.averageStrokeRateSpm > 0 && result.activePowerSamples > 0) {
+        weightedSum += result.averageStrokeRateSpm * result.activePowerSamples;
+        weight += result.activePowerSamples;
+      }
+    }
+
+    return weight == 0 ? 0 : weightedSum / weight;
+  }
+
+  double get totalAveragePace {
+    var weightedSum = 0.0;
+    var weight = 0;
+
+    for (final result in stepResults) {
+      if (result.averagePace500mSeconds > 0 && result.activePowerSamples > 0) {
+        weightedSum +=
+            result.averagePace500mSeconds * result.activePowerSamples;
+        weight += result.activePowerSamples;
+      }
+    }
+
+    return weight == 0 ? 0 : weightedSum / weight;
+  }
+
+  double? get totalTargetPercentage {
+    var inTarget = 0;
+    var samples = 0;
+
+    for (final result in stepResults) {
+      if (!result.hasPowerTarget) {
+        continue;
+      }
+
+      inTarget += result.samplesInTarget;
+      samples += result.activePowerSamples;
+    }
+
+    if (samples == 0) {
+      return null;
+    }
+
+    return inTarget / samples * 100;
+  }
+
+  Widget workoutSummaryCard(BuildContext context) {
+    final targetPercentage = totalTargetPercentage;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          children: [
+            Text('Gesamt', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 20),
+
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Trainingszeit'),
+                Text(formatDuration(totalResultDuration)),
+              ],
+            ),
+            const SizedBox(height: 10),
+
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [const Text('Distanz'), Text('$totalResultDistance m')],
+            ),
+            const SizedBox(height: 10),
+
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Ø Leistung'),
+                Text('${resultPower(totalAveragePower)} W'),
+              ],
+            ),
+            const SizedBox(height: 10),
+
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Ø Schlagrate'),
+                Text('${resultSpm(totalAverageStrokeRate)} SPM'),
+              ],
+            ),
+            const SizedBox(height: 10),
+
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Ø Pace'),
+                Text('${resultPace(totalAveragePace)} /500 m'),
+              ],
+            ),
+
+            if (targetPercentage != null) ...[
+              const SizedBox(height: 16),
+              const Divider(),
+              const SizedBox(height: 10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Im Zielbereich'),
+                  Text(
+                    '${targetPercentage.toStringAsFixed(0)} %',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget workoutResults(BuildContext context) {
     return SafeArea(
       child: ListView(
@@ -413,6 +558,14 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 24),
+
+          workoutSummaryCard(context),
+
+          const SizedBox(height: 24),
+
+          Text('Abschnitte', style: Theme.of(context).textTheme.titleLarge),
+
+          const SizedBox(height: 12),
 
           for (final result in stepResults) ...[
             stepResultCard(context, result),
