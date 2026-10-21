@@ -16,6 +16,7 @@ import 'models/scheduled_workout.dart';
 import 'screens/training_screen.dart';
 import 'screens/workout_detail_screen.dart';
 import 'theme/pirowflo_theme.dart';
+import 'widgets/pirowflo_drawer.dart';
 
 void main() {
   runApp(const PiRowFloApp());
@@ -728,69 +729,19 @@ class _ControlPageState extends State<ControlPage> {
           ),
         ],
       ),
-      drawer: Drawer(
-        child: SafeArea(
-          child: Column(
-            children: [
-              const ListTile(
-                leading: Icon(Icons.rowing),
-                title: Text(
-                  'PiRowFlo Control',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ),
-              const Divider(),
+      drawer: PiRowFloDrawer(
+        selectedPage: selectedPage,
+        onSelectPage: (page) {
+          Navigator.pop(context);
 
-              ListTile(
-                leading: const Icon(Icons.home),
-                title: const Text('Übersicht'),
-                selected: selectedPage == 0,
-                onTap: () {
-                  Navigator.pop(context);
-                  setState(() {
-                    selectedPage = 0;
-                  });
-                },
-              ),
-
-              ListTile(
-                leading: const Icon(Icons.rowing),
-                title: const Text('Training'),
-                selected: selectedPage == 1,
-                onTap: () {
-                  Navigator.pop(context);
-                  setState(() {
-                    selectedPage = 1;
-                  });
-                },
-              ),
-
-              ListTile(
-                leading: const Icon(Icons.settings_remote),
-                title: const Text('PiRowFlo-Steuerung'),
-                selected: selectedPage == 2,
-                onTap: () {
-                  Navigator.pop(context);
-                  setState(() {
-                    selectedPage = 2;
-                  });
-                },
-              ),
-
-              const Spacer(),
-              const Divider(),
-
-              ListTile(
-                leading: const Icon(Icons.settings),
-                title: const Text('Einstellungen'),
-                onTap: () {
-                  Navigator.pop(context);
-                  showSettings();
-                },
-              ),
-            ],
-          ),
-        ),
+          setState(() {
+            selectedPage = page;
+          });
+        },
+        onSettings: () {
+          Navigator.pop(context);
+          showSettings();
+        },
       ),
       body: switch (selectedPage) {
         0 => HomeScreen(

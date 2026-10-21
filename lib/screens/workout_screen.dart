@@ -316,84 +316,28 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   }
 
   Widget stepResultCard(BuildContext context, WorkoutStepResult result) {
-    final targetPercentage = result.targetPercentage;
+    final values = <String>[formatDuration(result.duration)];
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              result.step.title,
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              stepTypeLabel(result.step.type),
-              style: Theme.of(context).textTheme.labelLarge,
-            ),
-            const SizedBox(height: 16),
+    if (result.averagePowerW > 0) {
+      values.add('${resultPower(result.averagePowerW)} W');
+    }
 
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Dauer'),
-                Text(formatDuration(result.duration)),
-              ],
-            ),
-            const SizedBox(height: 8),
+    if (result.averageStrokeRateSpm > 0) {
+      values.add('${resultSpm(result.averageStrokeRateSpm)} SPM');
+    }
 
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Ø Leistung'),
-                Text('${resultPower(result.averagePowerW)} W'),
-              ],
-            ),
-            const SizedBox(height: 8),
+    if (result.averagePace500mSeconds > 0) {
+      values.add('${resultPace(result.averagePace500mSeconds)} /500 m');
+    }
 
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Ø Schlagrate'),
-                Text('${resultSpm(result.averageStrokeRateSpm)} SPM'),
-              ],
-            ),
-            const SizedBox(height: 8),
+    if (result.distanceM > 0) {
+      values.add('${result.distanceM} m');
+    }
 
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Ø Pace'),
-                Text('${resultPace(result.averagePace500mSeconds)} /500 m'),
-              ],
-            ),
-            const SizedBox(height: 8),
-
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [const Text('Distanz'), Text('${result.distanceM} m')],
-            ),
-
-            if (targetPercentage != null) ...[
-              const SizedBox(height: 12),
-              const Divider(),
-              const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text('Im Zielbereich'),
-                  Text(
-                    '${targetPercentage.toStringAsFixed(0)} %',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                ],
-              ),
-            ],
-          ],
-        ),
-      ),
+    return _ResultStep(
+      title: result.step.title,
+      subtitle: values.join(' · '),
+      targetPercentage: result.targetPercentage,
     );
   }
 
@@ -472,108 +416,117 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   Widget workoutSummaryCard(BuildContext context) {
     final targetPercentage = totalTargetPercentage;
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
+    return Column(
+      children: [
+        Row(
           children: [
-            Text('Gesamt', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 20),
-
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Trainingszeit'),
-                Text(formatDuration(totalResultDuration)),
-              ],
-            ),
-            const SizedBox(height: 10),
-
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [const Text('Distanz'), Text('$totalResultDistance m')],
-            ),
-            const SizedBox(height: 10),
-
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Ø Leistung'),
-                Text('${resultPower(totalAveragePower)} W'),
-              ],
-            ),
-            const SizedBox(height: 10),
-
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Ø Schlagrate'),
-                Text('${resultSpm(totalAverageStrokeRate)} SPM'),
-              ],
-            ),
-            const SizedBox(height: 10),
-
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Ø Pace'),
-                Text('${resultPace(totalAveragePace)} /500 m'),
-              ],
-            ),
-
-            if (targetPercentage != null) ...[
-              const SizedBox(height: 16),
-              const Divider(),
-              const SizedBox(height: 10),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text('Im Zielbereich'),
-                  Text(
-                    '${targetPercentage.toStringAsFixed(0)} %',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                ],
+            Expanded(
+              child: _ResultMetric(
+                icon: Icons.timer_outlined,
+                value: formatDuration(totalResultDuration),
+                label: 'Dauer',
               ),
-            ],
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _ResultMetric(
+                icon: Icons.straighten,
+                value: '$totalResultDistance m',
+                label: 'Distanz',
+              ),
+            ),
           ],
         ),
-      ),
+
+        const SizedBox(height: 12),
+
+        Row(
+          children: [
+            Expanded(
+              child: _ResultMetric(
+                icon: Icons.bolt,
+                value: '${resultPower(totalAveragePower)} W',
+                label: 'Ø Leistung',
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _ResultMetric(
+                icon: Icons.speed,
+                value: '${resultSpm(totalAverageStrokeRate)} SPM',
+                label: 'Ø Schlagrate',
+              ),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 12),
+
+        _ResultMetric(
+          icon: Icons.timer,
+          value: '${resultPace(totalAveragePace)} /500 m',
+          label: 'Ø Pace',
+        ),
+
+        if (targetPercentage != null) ...[
+          const SizedBox(height: 12),
+
+          _TargetResult(percentage: targetPercentage),
+        ],
+      ],
     );
   }
 
   Widget workoutResults(BuildContext context) {
     return SafeArea(
       child: ListView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
         children: [
+          Center(
+            child: Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                color: Colors.green.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.check, color: Colors.green, size: 36),
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
           Text(
             'Training abgeschlossen',
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.headlineMedium,
           ),
-          const SizedBox(height: 8),
+
+          const SizedBox(height: 6),
+
           Text(
             widget.workout.name,
             textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.titleLarge,
+            style: Theme.of(context).textTheme.titleMedium,
           ),
-          const SizedBox(height: 24),
+
+          const SizedBox(height: 30),
 
           workoutSummaryCard(context),
 
-          const SizedBox(height: 24),
+          const SizedBox(height: 34),
 
           Text('Abschnitte', style: Theme.of(context).textTheme.titleLarge),
 
-          const SizedBox(height: 12),
+          const SizedBox(height: 18),
 
-          for (final result in stepResults) ...[
-            stepResultCard(context, result),
-            const SizedBox(height: 12),
-          ],
+          for (var i = 0; i < stepResults.length; i++)
+            _ResultTimelineEntry(
+              showLine: i < stepResults.length - 1,
+              child: stepResultCard(context, stepResults[i]),
+            ),
 
-          const SizedBox(height: 12),
+          const SizedBox(height: 28),
 
           FilledButton.icon(
             onPressed: () => Navigator.pop(context),
@@ -662,10 +615,12 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                         Center(
                           child: WorkoutPowerGauge(
                             progress: progress,
-                            powerW: metrics?.powerW ?? 0,
+                            powerW: metrics?.smartRowReady == true
+                                ? metrics!.powerW
+                                : 0,
                             targetPowerMin: step.targetPowerMin,
                             targetPowerMax: step.targetPowerMax,
-                            powerColor: metrics != null
+                            powerColor: metrics?.smartRowReady == true
                                 ? powerColor(context, step, metrics!)
                                 : Theme.of(context).colorScheme.primary,
                           ),
@@ -688,7 +643,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
                         const SizedBox(height: 26),
 
-                        if (metrics != null)
+                        if (metrics != null && metrics!.smartRowReady)
                           Row(
                             children: [
                               WorkoutMetric(
@@ -717,8 +672,29 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                             ],
                           )
                         else
-                          const Center(child: CircularProgressIndicator()),
-
+                          Card(
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.sensors_off,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .outline,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Text(
+                                    'Keine SmartRow-Livedaten',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
                         if (metricsError != null) ...[
                           const SizedBox(height: 12),
                           Text(
@@ -814,6 +790,184 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                 ),
               ],
             ),
+    );
+  }
+}
+
+class _ResultMetric extends StatelessWidget {
+  final IconData icon;
+  final String value;
+  final String label;
+
+  const _ResultMetric({
+    required this.icon,
+    required this.value,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
+        child: Column(
+          children: [
+            Icon(icon, color: Theme.of(context).colorScheme.primary, size: 22),
+            const SizedBox(height: 8),
+            Text(
+              value,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleLarge
+                  ?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TargetResult extends StatelessWidget {
+  final double percentage;
+
+  const _TargetResult({required this.percentage});
+
+  @override
+  Widget build(BuildContext context) {
+    final value = (percentage / 100).clamp(0.0, 1.0);
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 74,
+              height: 74,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  CircularProgressIndicator(
+                    value: value,
+                    strokeWidth: 8,
+                    strokeCap: StrokeCap.round,
+                    backgroundColor: Theme.of(context).colorScheme.primary
+                        .withValues(alpha: 0.12),
+                  ),
+                  Text(
+                    '${percentage.toStringAsFixed(0)} %',
+                    style: Theme.of(context).textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 18),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Im Zielbereich',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Anteil der Leistungsmessungen innerhalb '
+                    'des vorgegebenen Wattbereichs.',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ResultStep extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final double? targetPercentage;
+
+  const _ResultStep({
+    required this.title,
+    required this.subtitle,
+    required this.targetPercentage,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 4),
+          Text(subtitle, style: Theme.of(context).textTheme.bodyMedium),
+          if (targetPercentage != null) ...[
+            const SizedBox(height: 5),
+            Text(
+              '${targetPercentage!.toStringAsFixed(0)} % im Zielbereich',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.primary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ResultTimelineEntry extends StatelessWidget {
+  final bool showLine;
+  final Widget child;
+
+  const _ResultTimelineEntry({required this.showLine, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            width: 30,
+            child: Column(
+              children: [
+                Container(
+                  width: 12,
+                  height: 12,
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primary,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                if (showLine)
+                  Expanded(
+                    child: Container(
+                      width: 2,
+                      color: Theme.of(context).colorScheme.primary
+                          .withValues(alpha: 0.25),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          Expanded(child: child),
+        ],
+      ),
     );
   }
 }
