@@ -51,10 +51,121 @@ class WorkoutDetailScreen extends StatelessWidget {
     };
   }
 
+  bool _sameTargets(WorkoutStep a, WorkoutStep b) {
+    return a.duration == b.duration &&
+        a.targetPowerMin == b.targetPowerMin &&
+        a.targetPowerMax == b.targetPowerMax &&
+        a.targetSpmMin == b.targetSpmMin &&
+        a.targetSpmMax == b.targetSpmMax &&
+        a.targetPaceMinSeconds == b.targetPaceMinSeconds &&
+        a.targetPaceMaxSeconds == b.targetPaceMaxSeconds;
+  }
+
+  ({WorkoutStep work, WorkoutStep recovery, int count})?
+  _findRepeatedIntervals() {
+    final intervalSteps = workout.steps
+        .where(
+          (step) =>
+              step.type == WorkoutStepType.work ||
+              step.type == WorkoutStepType.recovery,
+        )
+        .toList();
+
+    if (intervalSteps.length < 4 || intervalSteps.length.isOdd) {
+      return null;
+    }
+
+    final work = intervalSteps[0];
+    final recovery = intervalSteps[1];
+
+    if (work.type != WorkoutStepType.work ||
+        recovery.type != WorkoutStepType.recovery) {
+      return null;
+    }
+
+    for (var i = 0; i < intervalSteps.length; i += 2) {
+      if (intervalSteps[i].type != WorkoutStepType.work ||
+          intervalSteps[i + 1].type != WorkoutStepType.recovery ||
+          !_sameTargets(intervalSteps[i], work) ||
+          !_sameTargets(intervalSteps[i + 1], recovery)) {
+        return null;
+      }
+    }
+
+    return (work: work, recovery: recovery, count: intervalSteps.length ~/ 2);
+  }
+
+  Widget _intervalCard(
+    BuildContext context,
+    WorkoutStep work,
+    WorkoutStep recovery,
+    int count,
+  ) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Intervalle × $count',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 16),
+
+            Text('Belastung', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 4),
+            Text(_stepSummary(work)),
+
+            const SizedBox(height: 16),
+
+            Text('Erholung', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 4),
+            Text(_stepSummary(recovery)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _stepSummary(WorkoutStep step) {
+    final parts = <String>[_formatDuration(step.duration)];
+
+    if (step.targetPowerMin != null && step.targetPowerMax != null) {
+      parts.add('${step.targetPowerMin}–${step.targetPowerMax} W');
+    }
+
+    if (step.targetSpmMin != null && step.targetSpmMax != null) {
+      parts.add('${step.targetSpmMin}–${step.targetSpmMax} SPM');
+    }
+
+    if (step.hasTargetPace) {
+      parts.add(
+        '${_formatPace(step.targetPaceMinSeconds!)}–'
+        '${_formatPace(step.targetPaceMaxSeconds!)} /500 m',
+      );
+    }
+
+    return parts.join(' · ');
+  }
+
   @override
   Widget build(BuildContext context) {
+    final repeatedIntervals = _findRepeatedIntervals();
     return Scaffold(
       appBar: AppBar(title: const Text('Training')),
+
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: FilledButton.icon(
+            onPressed: onStartWorkout,
+            icon: const Icon(Icons.fitness_center),
+            label: const Text('Training jetzt starten'),
+          ),
+        ),
+      ),
+
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(20),
@@ -81,24 +192,29 @@ class WorkoutDetailScreen extends StatelessWidget {
             const SizedBox(height: 24),
 
             for (final step in workout.steps) ...[
-              _WorkoutStepCard(
-                step: step,
-                formatDuration: _formatDuration,
-                formatPace: _formatPace,
-                stepTypeLabel: _stepTypeLabel,
-              ),
-              const SizedBox(height: 12),
+              if (step.type == WorkoutStepType.warmup ||
+                  step.type == WorkoutStepType.cooldown ||
+                  repeatedIntervals == null) ...[
+                _WorkoutStepCard(
+                  step: step,
+                  formatDuration: _formatDuration,
+                  formatPace: _formatPace,
+                  stepTypeLabel: _stepTypeLabel,
+                ),
+                const SizedBox(height: 12),
+              ] else if (step == repeatedIntervals.work) ...[
+                _intervalCard(
+                  context,
+                  repeatedIntervals.work,
+                  repeatedIntervals.recovery,
+                  repeatedIntervals.count,
+                ),
+                const SizedBox(height: 12),
+              ],
             ],
 
-            const SizedBox(height: 12),
-
-            FilledButton.icon(
-              onPressed: onStartWorkout,
-              icon: const Icon(Icons.fitness_center),
-              label: const Text('Training jetzt starten'),
-            ),
-
-            const SizedBox(height: 20),
+            // Etwas Platz unter der letzten Karte.
+            const SizedBox(height: 8),
           ],
         ),
       ),
