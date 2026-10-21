@@ -22,10 +22,17 @@ class NextcloudCalendarService {
     'Depth': '1',
   };
 
-  Future<List<CalendarEvent>> getEventsForDay(DateTime day) async {
+  Future<List<CalendarEvent>> getEventsForDay(DateTime day) {
     final start = DateTime.utc(day.year, day.month, day.day);
     final end = start.add(const Duration(days: 1));
 
+    return getEventsForRange(start, end);
+  }
+
+  Future<List<CalendarEvent>> getEventsForRange(
+    DateTime start,
+    DateTime end,
+  ) async {
     final body =
         '''
 <?xml version="1.0" encoding="utf-8" ?>
@@ -40,8 +47,8 @@ class NextcloudCalendarService {
     <c:comp-filter name="VCALENDAR">
       <c:comp-filter name="VEVENT">
         <c:time-range
-            start="${_calDavDate(start)}"
-            end="${_calDavDate(end)}" />
+            start="${_calDavDate(start.toUtc())}"
+            end="${_calDavDate(end.toUtc())}" />
       </c:comp-filter>
     </c:comp-filter>
   </c:filter>
@@ -100,15 +107,63 @@ class NextcloudCalendarService {
 
       final summary = _icsValue(ics, 'SUMMARY');
       final description = _icsValue(ics, 'DESCRIPTION');
+      final dtStart = _icsValue(ics, 'DTSTART');
 
-      if (summary != null) {
+      final start = dtStart == null ? null : _parseIcsDateTime(dtStart);
+
+      if (summary != null && start != null) {
         events.add(
-          CalendarEvent(summary: summary, description: description ?? ''),
+          CalendarEvent(
+            summary: summary,
+            description: description ?? '',
+            start: start,
+          ),
         );
       }
     }
 
     return events;
+  }
+
+  DateTime? _parseIcsDateTime(String value) {
+    try {
+      if (value.length == 8) {
+        return DateTime(
+          int.parse(value.substring(0, 4)),
+          int.parse(value.substring(4, 6)),
+          int.parse(value.substring(6, 8)),
+        );
+      }
+
+      final isUtc = value.endsWith('Z');
+      final raw = isUtc ? value.substring(0, value.length - 1) : value;
+
+      if (raw.length < 15) {
+        return null;
+      }
+
+      final date = DateTime(
+        int.parse(raw.substring(0, 4)),
+        int.parse(raw.substring(4, 6)),
+        int.parse(raw.substring(6, 8)),
+        int.parse(raw.substring(9, 11)),
+        int.parse(raw.substring(11, 13)),
+        int.parse(raw.substring(13, 15)),
+      );
+
+      return isUtc
+          ? DateTime.utc(
+              date.year,
+              date.month,
+              date.day,
+              date.hour,
+              date.minute,
+              date.second,
+            ).toLocal()
+          : date;
+    } catch (_) {
+      return null;
+    }
   }
 
   String? _icsValue(String ics, String property) {

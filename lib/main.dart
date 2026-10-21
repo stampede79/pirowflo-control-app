@@ -11,6 +11,8 @@ import 'models/workout.dart';
 import 'services/workout_parser.dart';
 
 import 'services/nextcloud_calendar_service.dart';
+import 'screens/home_screen.dart';
+import 'models/scheduled_workout.dart';
 
 void main() {
   runApp(const PiRowFloApp());
@@ -55,6 +57,7 @@ class _ControlPageState extends State<ControlPage> {
   final nextcloudPasswordController = TextEditingController();
 
   String? calendarTestResult;
+  int selectedPage = 0;
 
   bool loading = false;
   bool configured = false;
@@ -77,6 +80,7 @@ class _ControlPageState extends State<ControlPage> {
   Workout? todaysWorkout;
   bool calendarLoading = false;
   String? calendarError;
+  ScheduledWorkout? nextWorkout;
 
   @override
   void initState() {
@@ -89,10 +93,10 @@ class _ControlPageState extends State<ControlPage> {
     statusTimer?.cancel();
     serverController.dispose();
     apiKeyController.dispose();
-    super.dispose();
     calendarUrlController.dispose();
     nextcloudUserController.dispose();
     nextcloudPasswordController.dispose();
+    super.dispose();
   }
 
   Future<void> loadConfiguration() async {
@@ -125,6 +129,7 @@ class _ControlPageState extends State<ControlPage> {
       statusTimer?.cancel();
     }
     await loadTodaysWorkout();
+    await loadNextWorkout();
   }
 
   Future<void> saveConfiguration() async {
@@ -169,6 +174,7 @@ class _ControlPageState extends State<ControlPage> {
       statusTimer?.cancel();
     }
     await loadTodaysWorkout();
+    await loadNextWorkout();
   }
 
   Map<String, String> get headers => {
@@ -457,6 +463,74 @@ class _ControlPageState extends State<ControlPage> {
     }
   }
 
+  Future<void> loadNextWorkout() async {
+    final calendarUrl = calendarUrlController.text.trim();
+    final username = nextcloudUserController.text.trim();
+    final password = nextcloudPasswordController.text;
+
+    if (calendarUrl.isEmpty || username.isEmpty || password.isEmpty) {
+      return;
+    }
+
+    try {
+      final service = NextcloudCalendarService(
+        calendarUrl: calendarUrl,
+        username: username,
+        appPassword: password,
+      );
+
+      final now = DateTime.now();
+
+      // Morgen 00:00 bis einschließlich der folgenden 14 Tage.
+      final start = DateTime(now.year, now.month, now.day + 1);
+
+      final end = start.add(const Duration(days: 14));
+
+      final events = await service.getEventsForRange(start, end);
+
+      ScheduledWorkout? found;
+
+      events.sort((a, b) => a.start.compareTo(b.start));
+
+      for (final event in events) {
+        final eventDate = event.start.toLocal();
+
+        final eventDay = DateTime(
+          eventDate.year,
+          eventDate.month,
+          eventDate.day,
+        );
+
+        if (eventDay.isBefore(start)) {
+          continue;
+        }
+
+        final workout = WorkoutParser.parse(
+          name: event.summary,
+          description: event.description,
+        );
+
+        if (workout != null) {
+          found = ScheduledWorkout(start: eventDate, workout: workout);
+          break;
+        }
+      }
+      if (!mounted) return;
+
+      setState(() {
+        nextWorkout = found;
+      });
+    } catch (_) {
+      // Das nächste Training ist eine Zusatzinformation.
+      // Ein Fehler soll die heutige Trainingsanzeige nicht beeinträchtigen.
+      if (!mounted) return;
+
+      setState(() {
+        nextWorkout = null;
+      });
+    }
+  }
+
   Future<void> startWorkout() async {
     if (todaysWorkout == null) {
       return;
@@ -614,240 +688,209 @@ class _ControlPageState extends State<ControlPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('PiRowFlo Control'),
+        title: Text(selectedPage == 0 ? 'Übersicht' : 'PiRowFlo-Steuerung'),
         actions: [
           IconButton(
             onPressed: loading ? null : refreshStatus,
             icon: const Icon(Icons.refresh),
             tooltip: 'Aktualisieren',
           ),
-          IconButton(
-            onPressed: showSettings,
-            icon: const Icon(Icons.settings),
-            tooltip: 'Einstellungen',
-          ),
         ],
       ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: !configured
-              ? Center(
-                  child: FilledButton.icon(
-                    onPressed: showSettings,
-                    icon: const Icon(Icons.settings),
-                    label: const Text('Verbindung einrichten'),
-                  ),
-                )
-              : ListView(
-                  children: [
-                    if (calendarLoading)
-                      const Card(
-                        child: Padding(
-                          padding: EdgeInsets.all(20),
-                          child: Row(
-                            children: [
-                              SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              ),
-                              SizedBox(width: 16),
-                              Text('Trainingsplan wird geladen …'),
-                            ],
-                          ),
-                        ),
-                      ),
-
-                    if (calendarError != null)
-                      Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Text(
-                            calendarError!,
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.error,
-                            ),
-                          ),
-                        ),
-                      ),
-
-                    if (todaysWorkout != null) ...[
-                      Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(20),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Heutiges Training',
-                                style: Theme.of(context).textTheme.labelLarge,
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                todaysWorkout!.name,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .headlineSmall,
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                todaysWorkout!.description,
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'Dauer: ${todaysWorkout!.totalDuration.inMinutes} Minuten',
-                              ),
-                              const SizedBox(height: 16),
-
-                              Row(
-                                children: [
-                                  Icon(
-                                    smartRowReady
-                                        ? Icons.check_circle
-                                        : smartRowConnected
-                                        ? Icons.sync
-                                        : Icons.radio_button_unchecked,
-                                    color: smartRowReady
-                                        ? Colors.green
-                                        : smartRowConnected
-                                        ? Colors.orange
-                                        : Colors.grey,
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Text(
-                                    smartRowReady
-                                        ? 'SmartRow verbunden'
-                                        : smartRowConnected
-                                        ? 'SmartRow wird verbunden …'
-                                        : 'SmartRow nicht verbunden',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleMedium,
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 20),
-                              SizedBox(
-                                width: double.infinity,
-                                child: FilledButton.icon(
-                                  onPressed: startWorkout,
-                                  icon: const Icon(Icons.fitness_center),
-                                  label: const Text('Training starten'),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                    ],
-                    statusRow('BLE + ANT+', states['combined'] ?? 'UNKNOWN'),
-                    statusRow('Bluetooth', states['bluetooth'] ?? 'UNKNOWN'),
-                    statusRow('ANT+', states['ant'] ?? 'UNKNOWN'),
-                    if (error != null) ...[
-                      const SizedBox(height: 16),
-                      Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Text(
-                            error!,
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.error,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 24),
-
-                    FilledButton.icon(
-                      onPressed: loading || states['combined'] == 'RUNNING'
-                          ? null
-                          : () => post('/api/start/combined'),
-                      icon: Icon(
-                        states['combined'] == 'RUNNING'
-                            ? Icons.check_circle
-                            : Icons.bluetooth_connected,
-                      ),
-                      label: Text(
-                        states['combined'] == 'RUNNING'
-                            ? 'BLE + ANT+ aktiv'
-                            : 'BLE + ANT+ starten',
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-
-                    FilledButton.tonalIcon(
-                      onPressed: loading || states['bluetooth'] == 'RUNNING'
-                          ? null
-                          : () => post('/api/start/bluetooth'),
-                      icon: Icon(
-                        states['bluetooth'] == 'RUNNING'
-                            ? Icons.check_circle
-                            : Icons.bluetooth,
-                      ),
-                      label: Text(
-                        states['bluetooth'] == 'RUNNING'
-                            ? 'Bluetooth aktiv'
-                            : 'Nur Bluetooth starten',
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-
-                    FilledButton.tonalIcon(
-                      onPressed: loading || states['ant'] == 'RUNNING'
-                          ? null
-                          : () => post('/api/start/ant'),
-                      icon: Icon(
-                        states['ant'] == 'RUNNING'
-                            ? Icons.check_circle
-                            : Icons.watch,
-                      ),
-                      label: Text(
-                        states['ant'] == 'RUNNING'
-                            ? 'ANT+ aktiv'
-                            : 'Nur ANT+ starten',
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    OutlinedButton.icon(
-                      onPressed: loading || !running
-                          ? null
-                          : () => post('/api/restart'),
-                      icon: const Icon(Icons.restart_alt),
-                      label: const Text('Neu starten'),
-                    ),
-                    const SizedBox(height: 12),
-
-                    OutlinedButton.icon(
-                      onPressed: loading || !smartRowConnected || !smartRowReady
-                          ? null
-                          : () => post('/api/reset'),
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('Training zurücksetzen'),
-                    ),
-                    const SizedBox(height: 12),
-
-                    OutlinedButton.icon(
-                      onPressed: loading || !running
-                          ? null
-                          : () => post('/api/stop'),
-                      icon: const Icon(Icons.stop),
-                      label: const Text('Stoppen'),
-                    ),
-
-                    if (loading) ...[
-                      const SizedBox(height: 24),
-                      const Center(child: CircularProgressIndicator()),
-                    ],
-                  ],
+      drawer: Drawer(
+        child: SafeArea(
+          child: Column(
+            children: [
+              const ListTile(
+                leading: Icon(Icons.rowing),
+                title: Text(
+                  'PiRowFlo Control',
+                  style: TextStyle(fontWeight: FontWeight.bold),
                 ),
+              ),
+              const Divider(),
+
+              ListTile(
+                leading: const Icon(Icons.home),
+                title: const Text('Übersicht'),
+                selected: selectedPage == 0,
+                onTap: () {
+                  Navigator.pop(context);
+                  setState(() {
+                    selectedPage = 0;
+                  });
+                },
+              ),
+
+              ListTile(
+                leading: const Icon(Icons.settings_remote),
+                title: const Text('PiRowFlo-Steuerung'),
+                selected: selectedPage == 1,
+                onTap: () {
+                  Navigator.pop(context);
+                  setState(() {
+                    selectedPage = 1;
+                  });
+                },
+              ),
+
+              const Spacer(),
+              const Divider(),
+
+              ListTile(
+                leading: const Icon(Icons.settings),
+                title: const Text('Einstellungen'),
+                onTap: () {
+                  Navigator.pop(context);
+                  showSettings();
+                },
+              ),
+            ],
+          ),
         ),
       ),
+      body: selectedPage == 0
+          ? HomeScreen(
+              running: running,
+              activeMode: activeMode,
+              smartRowConnected: smartRowConnected,
+              smartRowReady: smartRowReady,
+              calendarLoading: calendarLoading,
+              calendarError: calendarError,
+              todaysWorkout: todaysWorkout,
+              nextWorkout: nextWorkout,
+              onStartWorkout: startWorkout,
+            )
+          : SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: !configured
+                    ? Center(
+                        child: FilledButton.icon(
+                          onPressed: showSettings,
+                          icon: const Icon(Icons.settings),
+                          label: const Text('Verbindung einrichten'),
+                        ),
+                      )
+                    : ListView(
+                        children: [
+                          Text(
+                            'Betriebsmodi',
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
+                          const SizedBox(height: 12),
+                          statusRow(
+                            'BLE + ANT+',
+                            states['combined'] ?? 'UNKNOWN',
+                          ),
+                          statusRow(
+                            'Bluetooth',
+                            states['bluetooth'] ?? 'UNKNOWN',
+                          ),
+                          statusRow('ANT+', states['ant'] ?? 'UNKNOWN'),
+                          if (error != null) ...[
+                            const SizedBox(height: 16),
+                            Card(
+                              child: Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: Text(
+                                  error!,
+                                  style: TextStyle(
+                                    color: Theme.of(context).colorScheme.error,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 24),
+
+                          FilledButton.icon(
+                            onPressed:
+                                loading || states['combined'] == 'RUNNING'
+                                ? null
+                                : () => post('/api/start/combined'),
+                            icon: Icon(
+                              states['combined'] == 'RUNNING'
+                                  ? Icons.check_circle
+                                  : Icons.bluetooth_connected,
+                            ),
+                            label: Text(
+                              states['combined'] == 'RUNNING'
+                                  ? 'BLE + ANT+ aktiv'
+                                  : 'BLE + ANT+ starten',
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+
+                          FilledButton.tonalIcon(
+                            onPressed:
+                                loading || states['bluetooth'] == 'RUNNING'
+                                ? null
+                                : () => post('/api/start/bluetooth'),
+                            icon: Icon(
+                              states['bluetooth'] == 'RUNNING'
+                                  ? Icons.check_circle
+                                  : Icons.bluetooth,
+                            ),
+                            label: Text(
+                              states['bluetooth'] == 'RUNNING'
+                                  ? 'Bluetooth aktiv'
+                                  : 'Nur Bluetooth starten',
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+
+                          FilledButton.tonalIcon(
+                            onPressed: loading || states['ant'] == 'RUNNING'
+                                ? null
+                                : () => post('/api/start/ant'),
+                            icon: Icon(
+                              states['ant'] == 'RUNNING'
+                                  ? Icons.check_circle
+                                  : Icons.watch,
+                            ),
+                            label: Text(
+                              states['ant'] == 'RUNNING'
+                                  ? 'ANT+ aktiv'
+                                  : 'Nur ANT+ starten',
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          OutlinedButton.icon(
+                            onPressed: loading || !running
+                                ? null
+                                : () => post('/api/restart'),
+                            icon: const Icon(Icons.restart_alt),
+                            label: const Text('Neu starten'),
+                          ),
+                          const SizedBox(height: 12),
+
+                          OutlinedButton.icon(
+                            onPressed:
+                                loading || !smartRowConnected || !smartRowReady
+                                ? null
+                                : () => post('/api/reset'),
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('Training zurücksetzen'),
+                          ),
+                          const SizedBox(height: 12),
+
+                          OutlinedButton.icon(
+                            onPressed: loading || !running
+                                ? null
+                                : () => post('/api/stop'),
+                            icon: const Icon(Icons.stop),
+                            label: const Text('Stoppen'),
+                          ),
+
+                          if (loading) ...[
+                            const SizedBox(height: 24),
+                            const Center(child: CircularProgressIndicator()),
+                          ],
+                        ],
+                      ),
+              ),
+            ),
     );
   }
 }
