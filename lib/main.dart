@@ -102,6 +102,14 @@ class _ControlPageState extends State<ControlPage> {
     super.dispose();
   }
 
+  Future<void> refreshAll() async {
+    await Future.wait([
+      refreshStatus(),
+      loadTodaysWorkout(),
+      loadUpcomingWorkouts(),
+    ]);
+  }
+
   Future<void> loadConfiguration() async {
     final server = await storage.read(key: 'server');
     final apiKey = await storage.read(key: 'apiKey');
@@ -719,7 +727,7 @@ class _ControlPageState extends State<ControlPage> {
         }),
         actions: [
           IconButton(
-            onPressed: loading ? null : refreshStatus,
+            onPressed: loading ? null : refreshAll,
             icon: const Icon(Icons.refresh),
             tooltip: 'Aktualisieren',
           ),
