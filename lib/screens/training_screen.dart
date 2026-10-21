@@ -9,6 +9,7 @@ class TrainingScreen extends StatelessWidget {
   final bool calendarLoading;
   final String? calendarError;
   final VoidCallback onStartWorkout;
+  final void Function(ScheduledWorkout) onOpenWorkout;
 
   const TrainingScreen({
     super.key,
@@ -17,6 +18,7 @@ class TrainingScreen extends StatelessWidget {
     required this.calendarLoading,
     required this.calendarError,
     required this.onStartWorkout,
+    required this.onOpenWorkout,
   });
 
   String _formatDate(DateTime date) {
@@ -157,6 +159,8 @@ class TrainingScreen extends StatelessWidget {
                   '${_formatDate(scheduled.start)} · '
                   '${scheduled.workout.totalDuration.inMinutes} Min.',
                 ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => onOpenWorkout(scheduled),
               ),
             ),
             const SizedBox(height: 8),

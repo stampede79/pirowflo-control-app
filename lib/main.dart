@@ -14,6 +14,7 @@ import 'services/nextcloud_calendar_service.dart';
 import 'screens/home_screen.dart';
 import 'models/scheduled_workout.dart';
 import 'screens/training_screen.dart';
+import 'screens/workout_detail_screen.dart';
 
 void main() {
   runApp(const PiRowFloApp());
@@ -272,6 +273,22 @@ class _ControlPageState extends State<ControlPage> {
     } catch (_) {
       // Hintergrund-Refresh soll die Oberfläche nicht mit Fehlern fluten.
     }
+  }
+
+  Future<void> openWorkoutDetail(ScheduledWorkout scheduled) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => WorkoutDetailScreen(
+          workout: scheduled.workout,
+          scheduledDate: scheduled.start,
+          onStartWorkout: () {
+            Navigator.pop(context);
+            startWorkout(scheduled.workout);
+          },
+        ),
+      ),
+    );
   }
 
   void startStatusTimer() {
@@ -541,11 +558,7 @@ class _ControlPageState extends State<ControlPage> {
     }
   }
 
-  Future<void> startWorkout() async {
-    if (todaysWorkout == null) {
-      return;
-    }
-
+  Future<void> startWorkout(Workout workout) async {
     if (!smartRowReady) {
       final startAnyway = await showDialog<bool>(
         context: context,
@@ -578,7 +591,7 @@ class _ControlPageState extends State<ControlPage> {
       context,
       MaterialPageRoute(
         builder: (_) => WorkoutScreen(
-          workout: todaysWorkout!,
+          workout: workout,
           server: serverController.text,
           apiKey: apiKeyController.text,
         ),
@@ -786,7 +799,11 @@ class _ControlPageState extends State<ControlPage> {
           calendarError: calendarError,
           todaysWorkout: todaysWorkout,
           nextWorkout: nextWorkout,
-          onStartWorkout: startWorkout,
+          onStartWorkout: () {
+            if (todaysWorkout != null) {
+              startWorkout(todaysWorkout!);
+            }
+          },
         ),
 
         1 => TrainingScreen(
@@ -794,7 +811,12 @@ class _ControlPageState extends State<ControlPage> {
           upcomingWorkouts: upcomingWorkouts,
           calendarLoading: calendarLoading,
           calendarError: calendarError,
-          onStartWorkout: startWorkout,
+          onStartWorkout: () {
+            if (todaysWorkout != null) {
+              startWorkout(todaysWorkout!);
+            }
+          },
+          onOpenWorkout: openWorkoutDetail,
         ),
 
         _ => SafeArea(
