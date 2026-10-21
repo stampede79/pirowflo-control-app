@@ -72,6 +72,7 @@ flutter:
     - assets/sounds/work.wav
     - assets/sounds/recovery.wav
     - assets/sounds/finished.wav
+    - assets/images/rowing_background.png
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
 

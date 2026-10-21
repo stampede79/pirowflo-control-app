@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pirowflo_control/services/workout_parser.dart';
+import 'package:pirowflo_control/models/workout.dart';
 
 void main() {
   test('parst das Intervalltraining vom 20. Oktober', () {
@@ -68,6 +69,59 @@ cooldown=5m
 
     expect(workout.totalDuration.inMinutes, 50);
   });
+
+  test(
+    'parst Regenerationstraining mit Wattzielen in Warm-up und Cool-down',
+    () {
+      const description = '''
+Kleine regenerative Einheit passend zum Oktober-Trainingsplan.
+
+[PIROWFLO]
+warmup=5m,80-90w
+repeat=1
+work=20m,95-105w
+recovery=0m
+cooldown=5m,80-90w
+[/PIROWFLO]
+''';
+
+      final workout = WorkoutParser.parse(
+        name: 'Regeneration',
+        description: description,
+      );
+
+      expect(workout, isNotNull);
+      expect(workout!.steps.length, 3);
+      expect(workout.totalDuration, const Duration(minutes: 30));
+
+      final warmup = workout.steps[0];
+
+      expect(warmup.type, WorkoutStepType.warmup);
+      expect(warmup.duration, const Duration(minutes: 5));
+      expect(warmup.targetPowerMin, 80);
+      expect(warmup.targetPowerMax, 90);
+
+      final work = workout.steps[1];
+
+      expect(work.type, WorkoutStepType.work);
+      expect(work.duration, const Duration(minutes: 20));
+      expect(work.targetPowerMin, 95);
+      expect(work.targetPowerMax, 105);
+
+      final cooldown = workout.steps[2];
+
+      expect(cooldown.type, WorkoutStepType.cooldown);
+      expect(cooldown.duration, const Duration(minutes: 5));
+      expect(cooldown.targetPowerMin, 80);
+      expect(cooldown.targetPowerMax, 90);
+
+      // recovery=0m darf keinen eigenen Schritt erzeugen.
+      expect(
+        workout.steps.any((step) => step.type == WorkoutStepType.recovery),
+        isFalse,
+      );
+    },
+  );
 
   test('ignoriert normale Kalendertermine ohne PiRowFlo-Daten', () {
     final workout = WorkoutParser.parse(

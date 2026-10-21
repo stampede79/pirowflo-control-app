@@ -33,13 +33,15 @@ class WorkoutParser {
 
     final warmup = values['warmup'];
     if (warmup != null) {
-      steps.add(
-        WorkoutStep(
-          type: WorkoutStepType.warmup,
-          title: 'Einrudern',
-          duration: _parseDuration(warmup),
-        ),
+      final step = _parseStep(
+        warmup,
+        type: WorkoutStepType.warmup,
+        title: 'Einrudern',
       );
+
+      if (step.duration > Duration.zero) {
+        steps.add(step);
+      }
     }
 
     final repeat = int.tryParse(values['repeat'] ?? '') ?? 1;
@@ -55,28 +57,31 @@ class WorkoutParser {
             title: repeat > 1 ? 'Intervall $i / $repeat' : 'Hauptteil',
           ),
         );
-
         if (recovery != null) {
-          steps.add(
-            _parseStep(
-              recovery,
-              type: WorkoutStepType.recovery,
-              title: 'Erholung $i / $repeat',
-            ),
+          final recoveryStep = _parseStep(
+            recovery,
+            type: WorkoutStepType.recovery,
+            title: 'Erholung $i / $repeat',
           );
+
+          if (recoveryStep.duration > Duration.zero) {
+            steps.add(recoveryStep);
+          }
         }
       }
     }
 
     final cooldown = values['cooldown'];
     if (cooldown != null) {
-      steps.add(
-        WorkoutStep(
-          type: WorkoutStepType.cooldown,
-          title: 'Ausrudern',
-          duration: _parseDuration(cooldown),
-        ),
+      final step = _parseStep(
+        cooldown,
+        type: WorkoutStepType.cooldown,
+        title: 'Ausrudern',
       );
+
+      if (step.duration > Duration.zero) {
+        steps.add(step);
+      }
     }
 
     if (steps.isEmpty) {

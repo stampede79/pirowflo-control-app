@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../models/workout.dart';
 import '../models/scheduled_workout.dart';
+import '../models/workout.dart';
+import '../widgets/section_title.dart';
+import '../widgets/system_status_card.dart';
+import '../widgets/water_header.dart';
 
 class HomeScreen extends StatelessWidget {
   final bool running;
@@ -16,6 +19,7 @@ class HomeScreen extends StatelessWidget {
 
   final VoidCallback onStartWorkout;
   final ScheduledWorkout? nextWorkout;
+  final void Function(ScheduledWorkout) onOpenWorkout;
 
   const HomeScreen({
     super.key,
@@ -28,6 +32,7 @@ class HomeScreen extends StatelessWidget {
     required this.todaysWorkout,
     required this.onStartWorkout,
     required this.nextWorkout,
+    required this.onOpenWorkout,
   });
 
   String _formatDate(DateTime date) {
@@ -43,176 +48,225 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.zero,
       children: [
-        Text('Status', style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: 12),
+        Stack(
+          clipBehavior: Clip.none,
+          children: [
+            const WaterHeader(height: 310),
 
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              children: [
-                _StatusRow(
-                  icon: running
-                      ? Icons.check_circle
-                      : Icons.radio_button_unchecked,
-                  iconColor: running ? Colors.green : Colors.grey,
-                  title: running ? 'PiRowFlo läuft' : 'PiRowFlo gestoppt',
-                  subtitle: 'Modus: $activeMode',
-                ),
-                const SizedBox(height: 16),
-                _StatusRow(
-                  icon: smartRowReady
-                      ? Icons.check_circle
-                      : smartRowConnected
-                      ? Icons.sync
-                      : Icons.radio_button_unchecked,
-                  iconColor: smartRowReady
-                      ? Colors.green
-                      : smartRowConnected
-                      ? Colors.orange
-                      : Colors.grey,
-                  title: smartRowReady
-                      ? 'SmartRow verbunden'
-                      : smartRowConnected
-                      ? 'SmartRow verbindet …'
-                      : 'SmartRow nicht verbunden',
-                ),
-              ],
+            Positioned(
+              left: 20,
+              right: 20,
+              bottom: -105,
+              child: SystemStatusCard(
+                running: running,
+                activeMode: activeMode,
+                smartRowConnected: smartRowConnected,
+                smartRowReady: smartRowReady,
+              ),
             ),
-          ),
+          ],
         ),
 
-        const SizedBox(height: 28),
+        // Platz für die über das Bild hinausragende Status-Card.
+        const SizedBox(height: 135),
 
-        Text('Heute', style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: 12),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SectionTitle('Heute', icon: Icons.today_outlined),
 
-        if (calendarLoading)
-          const Card(
-            child: Padding(
-              padding: EdgeInsets.all(20),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                  SizedBox(width: 16),
-                  Text('Trainingsplan wird geladen …'),
-                ],
-              ),
-            ),
-          )
-        else if (calendarError != null)
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Text(
-                calendarError!,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-            ),
-          )
-        else if (todaysWorkout == null)
-          const Card(
-            child: Padding(
-              padding: EdgeInsets.all(20),
-              child: Text('Heute ist kein Training geplant.'),
-            ),
-          )
-        else
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    todaysWorkout!.name,
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
-                  if (todaysWorkout!.description.isNotEmpty) ...[
-                    const SizedBox(height: 6),
-                    Text(todaysWorkout!.description),
-                  ],
-                  const SizedBox(height: 10),
-                  Text('${todaysWorkout!.totalDuration.inMinutes} Minuten'),
-                  const SizedBox(height: 20),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.icon(
-                      onPressed: onStartWorkout,
-                      icon: const Icon(Icons.fitness_center),
-                      label: const Text('Training starten'),
+              const SizedBox(height: 12),
+
+              if (calendarLoading)
+                const Card(
+                  child: Padding(
+                    padding: EdgeInsets.all(20),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                        SizedBox(width: 16),
+                        Text('Trainingsplan wird geladen …'),
+                      ],
                     ),
                   ),
-                ],
-              ),
-            ),
-          ),
+                )
+              else if (calendarError != null)
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Text(
+                      calendarError!,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                  ),
+                )
+              else if (todaysWorkout == null)
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.self_improvement,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                        const SizedBox(width: 14),
+                        const Expanded(
+                          child: Text('Heute ist kein Training geplant.'),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              width: 46,
+                              height: 46,
+                              decoration: BoxDecoration(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .primaryContainer,
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              child: Icon(
+                                Icons.rowing,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
 
-        // Hier kommt im nächsten Schritt:
-        //
-        // Nächstes Training
-        // Do., 22.10. · längere Grundlage · 50 Min.
-        if (nextWorkout != null) ...[
-          const SizedBox(height: 28),
+                            const SizedBox(width: 14),
 
-          Text(
-            'Nächstes Training',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    todaysWorkout!.name,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .headlineSmall,
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '${todaysWorkout!.totalDuration.inMinutes} Minuten',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
 
-          const SizedBox(height: 12),
+                        if (todaysWorkout!.description.isNotEmpty) ...[
+                          const SizedBox(height: 16),
+                          Text(
+                            todaysWorkout!.description,
+                            style: Theme.of(context).textTheme.bodyLarge,
+                          ),
+                        ],
 
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Text(
-                '${_formatDate(nextWorkout!.start)} · '
-                '${nextWorkout!.workout.name} · '
-                '${nextWorkout!.workout.totalDuration.inMinutes} Min.',
-              ),
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-}
+                        const SizedBox(height: 20),
 
-class _StatusRow extends StatelessWidget {
-  final IconData icon;
-  final Color iconColor;
-  final String title;
-  final String? subtitle;
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            onPressed: onStartWorkout,
+                            icon: const Icon(Icons.play_arrow),
+                            label: const Text('Training starten'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
 
-  const _StatusRow({
-    required this.icon,
-    required this.iconColor,
-    required this.title,
-    this.subtitle,
-  });
+              if (nextWorkout != null) ...[
+                const SizedBox(height: 30),
 
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, color: iconColor),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: Theme.of(context).textTheme.titleMedium),
-              if (subtitle != null) ...[
-                const SizedBox(height: 2),
-                Text(subtitle!),
+                const SectionTitle(
+                  'Nächstes Training',
+                  icon: Icons.event_outlined,
+                ),
+
+                const SizedBox(height: 12),
+
+                Card(
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    onTap: () => onOpenWorkout(nextWorkout!),
+                    child: Padding(
+                      padding: const EdgeInsets.all(18),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 46,
+                            height: 46,
+                            decoration: BoxDecoration(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .secondaryContainer,
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Icon(
+                              Icons.calendar_month_outlined,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          ),
+
+                          const SizedBox(width: 14),
+
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  nextWorkout!.workout.name,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleMedium,
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '${_formatDate(nextWorkout!.start)} · '
+                                  '${nextWorkout!.workout.totalDuration.inMinutes} Min.',
+                                  style: Theme.of(context).textTheme.bodyMedium,
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          Icon(
+                            Icons.chevron_right,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               ],
+              const SizedBox(height: 32),
             ],
           ),
         ),

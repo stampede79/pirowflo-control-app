@@ -15,6 +15,7 @@ import 'screens/home_screen.dart';
 import 'models/scheduled_workout.dart';
 import 'screens/training_screen.dart';
 import 'screens/workout_detail_screen.dart';
+import 'theme/pirowflo_theme.dart';
 
 void main() {
   runApp(const PiRowFloApp());
@@ -28,35 +29,7 @@ class PiRowFloApp extends StatelessWidget {
     return MaterialApp(
       title: 'PiRowFlo Control',
       debugShowCheckedModeBanner: false,
-theme: ThemeData(
-  colorScheme: ColorScheme.fromSeed(
-    seedColor: const Color(0xFF26C6DA),
-    brightness: Brightness.dark,
-    surface: const Color(0xFF10242D),
-  ),
-  scaffoldBackgroundColor: const Color(0xFF071A22),
-  useMaterial3: true,
-
-  appBarTheme: const AppBarTheme(
-    backgroundColor: Color(0xFF071A22),
-    foregroundColor: Colors.white,
-    elevation: 0,
-  ),
-
-  cardTheme: const CardThemeData(
-    color: Color(0xFF10242D),
-    elevation: 0,
-    margin: EdgeInsets.zero,
-  ),
-
-  navigationDrawerTheme: const NavigationDrawerThemeData(
-    backgroundColor: Color(0xFF0B2029),
-  ),
-
-  dividerTheme: const DividerThemeData(
-    color: Color(0xFF29434E),
-  ),
-),
+      theme: PiRowFloTheme.light,
       home: const ControlPage(),
     );
   }
@@ -742,7 +715,7 @@ class _ControlPageState extends State<ControlPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text(switch (selectedPage) {
-          0 => 'Übersicht',
+          0 => 'PiRowFlo Control',
           1 => 'Training',
           2 => 'PiRowFlo-Steuerung',
           _ => 'PiRowFlo Control',
@@ -834,6 +807,7 @@ class _ControlPageState extends State<ControlPage> {
               startWorkout(todaysWorkout!);
             }
           },
+          onOpenWorkout: openWorkoutDetail,
         ),
 
         1 => TrainingScreen(
