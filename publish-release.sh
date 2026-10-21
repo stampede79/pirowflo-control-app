@@ -5,7 +5,7 @@ set -euo pipefail
 REMOTE_HOST="jan@docker-services"
 REMOTE_DIR="/opt/app-downloads/html/pirowflo"
 
-APK_SOURCE="build/app/outputs/flutter-apk/app-release.apk"
+APK_SOURCE="build/app/outputs/flutter-apk/app-prod-release.apk"
 
 echo "========================================"
 echo " PiRowFlo Control Release"
@@ -36,7 +36,7 @@ flutter test
 
 echo
 echo "[3/6] Building release APK"
-flutter build apk --release
+flutter build apk --flavor prod --release
 
 if [ ! -f "$APK_SOURCE" ]; then
     echo "ERROR: APK not found: $APK_SOURCE"
@@ -153,6 +153,27 @@ cat > "$TMP_DIR/index.html" <<EOF
       </p>
     </div>
   </div>
+  <div class="card">
+    <h2>PiRowFlo Control Dev</h2>
+
+    <p>
+      Entwicklungs- und Testversion von PiRowFlo Control.
+    </p>
+
+    <p>
+      <a class="download"
+         href="/pirowflo/pirowflo-control-dev.apk">
+        Dev-Version herunterladen
+      </a>
+    </p>
+
+    <div class="meta">
+      <p>
+        Diese Version wird unabhängig von der stabilen App installiert
+        und verwendet eigene App-Daten.
+      </p>
+    </div>
+  </div>
 </body>
 </html>
 EOF
@@ -194,3 +215,5 @@ echo "SHA-256:  $SHA256"
 echo
 echo "Download:"
 echo "https://apps.roderwieser.com/"
+
+./update-download-page.sh

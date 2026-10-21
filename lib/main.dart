@@ -28,13 +28,35 @@ class PiRowFloApp extends StatelessWidget {
     return MaterialApp(
       title: 'PiRowFlo Control',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.green,
-          brightness: Brightness.dark,
-        ),
-        useMaterial3: true,
-      ),
+theme: ThemeData(
+  colorScheme: ColorScheme.fromSeed(
+    seedColor: const Color(0xFF26C6DA),
+    brightness: Brightness.dark,
+    surface: const Color(0xFF10242D),
+  ),
+  scaffoldBackgroundColor: const Color(0xFF071A22),
+  useMaterial3: true,
+
+  appBarTheme: const AppBarTheme(
+    backgroundColor: Color(0xFF071A22),
+    foregroundColor: Colors.white,
+    elevation: 0,
+  ),
+
+  cardTheme: const CardThemeData(
+    color: Color(0xFF10242D),
+    elevation: 0,
+    margin: EdgeInsets.zero,
+  ),
+
+  navigationDrawerTheme: const NavigationDrawerThemeData(
+    backgroundColor: Color(0xFF0B2029),
+  ),
+
+  dividerTheme: const DividerThemeData(
+    color: Color(0xFF29434E),
+  ),
+),
       home: const ControlPage(),
     );
   }

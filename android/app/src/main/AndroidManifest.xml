@@ -4,7 +4,7 @@
 
     <application
         android:usesCleartextTraffic="true"
-        android:label="pirowflo_control"
+        android:label="@string/app_name"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
