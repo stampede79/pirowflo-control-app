@@ -21,6 +21,7 @@ import 'services/endurain_service.dart';
 import 'models/endurain_summary.dart';
 import 'models/endurain_activity.dart';
 import 'screens/rowing_statistics_screen.dart';
+import 'screens/welcome_screen.dart';
 
 void main() {
   runApp(const PiRowFloApp());
@@ -80,6 +81,8 @@ class _ControlPageState extends State<ControlPage> {
   bool configured = false;
   String? error;
 
+  bool appReady = false;
+
   Map<String, String> states = {
     'combined': 'UNKNOWN',
     'bluetooth': 'UNKNOWN',
@@ -103,7 +106,23 @@ class _ControlPageState extends State<ControlPage> {
   @override
   void initState() {
     super.initState();
-    loadConfiguration();
+    initializeApp();
+  }
+
+  Future<void> initializeApp() async {
+    final minimumDisplayTime = Future<void>.delayed(
+      const Duration(milliseconds: 1600),
+    );
+
+    try {
+      await Future.wait([loadConfiguration(), minimumDisplayTime]);
+    } finally {
+      if (mounted) {
+        setState(() {
+          appReady = true;
+        });
+      }
+    }
   }
 
   @override
@@ -1017,6 +1036,9 @@ class _ControlPageState extends State<ControlPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (!appReady) {
+      return const WelcomeScreen();
+    }
     return Scaffold(
       appBar: AppBar(
         title: Text(switch (selectedPage) {
