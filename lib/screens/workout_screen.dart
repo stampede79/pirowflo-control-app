@@ -45,8 +45,22 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
   bool running = false;
   bool finished = false;
+  bool workoutStarted = false;
+  bool startingWorkout = false;
+  Timer? startCountdownTimer;
+  bool showStepPreview = false;
+  int previewCountdown = 0;
+  WorkoutStep? previewStep;
 
   WorkoutStep get currentStep => widget.workout.steps[currentStepIndex];
+
+  WorkoutStep? get nextWorkoutStep {
+    if (currentStepIndex >= widget.workout.steps.length - 1) {
+      return null;
+    }
+
+    return widget.workout.steps[currentStepIndex + 1];
+  }
 
   String resultPace(double seconds) {
     if (seconds <= 0) {
@@ -95,6 +109,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
     audioPlayer.dispose();
     WakelockPlus.disable();
+    startCountdownTimer?.cancel();
 
     super.dispose();
   }
@@ -123,8 +138,20 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   }
 
   void start() {
-    if (finished) return;
+    if (finished || startingWorkout) {
+      return;
+    }
 
+    // Nach einer Pause ohne Countdown fortsetzen.
+    if (workoutStarted) {
+      resumeWorkout();
+      return;
+    }
+
+    startWorkoutCountdown();
+  }
+
+  void resumeWorkout() {
     setState(() {
       running = true;
     });
@@ -132,6 +159,50 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     timer?.cancel();
 
     timer = Timer.periodic(const Duration(seconds: 1), (_) => tick());
+  }
+
+  void startWorkoutCountdown() {
+    startCountdownTimer?.cancel();
+
+    setState(() {
+      startingWorkout = true;
+      showStepPreview = true;
+      previewStep = currentStep;
+      previewCountdown = 3;
+    });
+
+    playCountdownSignal();
+
+    startCountdownTimer = Timer.periodic(const Duration(seconds: 1), (
+      countdownTimer,
+    ) {
+      if (!mounted) {
+        countdownTimer.cancel();
+        return;
+      }
+
+      if (previewCountdown > 1) {
+        setState(() {
+          previewCountdown--;
+        });
+
+        playCountdownSignal();
+        return;
+      }
+
+      countdownTimer.cancel();
+
+      setState(() {
+        startingWorkout = false;
+        workoutStarted = true;
+        showStepPreview = false;
+        previewCountdown = 0;
+        previewStep = null;
+      });
+
+      playStepChangeSignal(currentStep.type);
+      resumeWorkout();
+    });
   }
 
   void pause() {
@@ -151,6 +222,16 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       });
 
       if (remaining.inSeconds <= 3) {
+        final next = nextWorkoutStep;
+
+        if (next != null) {
+          setState(() {
+            showStepPreview = true;
+            previewCountdown = remaining.inSeconds;
+            previewStep = next;
+          });
+        }
+
         playCountdownSignal();
       }
 
@@ -189,6 +270,10 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       currentStepIndex++;
       remaining = currentStep.duration;
       stepRecorder = WorkoutStepRecorder(currentStep);
+
+      showStepPreview = false;
+      previewCountdown = 0;
+      previewStep = null;
     });
 
     if (playSound) {
@@ -538,6 +623,109 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     );
   }
 
+  Widget stepPreviewOverlay(BuildContext context) {
+    final step = previewStep;
+
+    if (!showStepPreview || step == null) {
+      return const SizedBox.shrink();
+    }
+
+    final targets = <String>[];
+
+    if (step.targetPowerMin != null && step.targetPowerMax != null) {
+      targets.add('${step.targetPowerMin}–${step.targetPowerMax} W');
+    }
+
+    if (step.targetSpmMin != null && step.targetSpmMax != null) {
+      targets.add('${step.targetSpmMin}–${step.targetSpmMax} SPM');
+    }
+
+    if (step.hasTargetPace) {
+      targets.add(
+        '${formatPace(step.targetPaceMinSeconds!)}–'
+        '${formatPace(step.targetPaceMaxSeconds!)} /500 m',
+      );
+    }
+
+    return Positioned.fill(
+      child: Container(
+        color: const Color(0xEAF2F9FB),
+        child: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(28),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    startingWorkout ? 'ERSTER ABSCHNITT' : 'NÄCHSTER ABSCHNITT',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.primary,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.4,
+                    ),
+                  ),
+
+                  const SizedBox(height: 18),
+
+                  Text(
+                    stepTypeLabel(step.type),
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.headlineMedium
+                        ?.copyWith(fontWeight: FontWeight.w800),
+                  ),
+
+                  if (step.title.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      step.title,
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                  ],
+
+                  if (targets.isNotEmpty) ...[
+                    const SizedBox(height: 24),
+
+                    for (final target in targets)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Text(
+                          target,
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.headlineSmall
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                  ],
+
+                  const SizedBox(height: 22),
+
+                  Text(
+                    formatDuration(step.duration),
+                    style: Theme.of(context).textTheme.titleLarge
+                        ?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+
+                  const SizedBox(height: 26),
+
+                  Text(
+                    '$previewCountdown',
+                    style: Theme.of(context).textTheme.displayLarge?.copyWith(
+                      fontWeight: FontWeight.w900,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final step = currentStep;
@@ -772,15 +960,27 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                         const SizedBox(height: 28),
 
                         FilledButton.icon(
-                          onPressed: running ? pause : start,
+                          onPressed: startingWorkout
+                              ? null
+                              : running
+                              ? pause
+                              : start,
                           icon: Icon(running ? Icons.pause : Icons.play_arrow),
-                          label: Text(running ? 'Pause' : 'Start / Fortsetzen'),
+                          label: Text(
+                            startingWorkout
+                                ? 'Training startet …'
+                                : running
+                                ? 'Pause'
+                                : workoutStarted
+                                ? 'Fortsetzen'
+                                : 'Training starten',
+                          ),
                         ),
 
                         const SizedBox(height: 10),
 
                         OutlinedButton.icon(
-                          onPressed: () => nextStep(),
+                          onPressed: startingWorkout ? null : () => nextStep(),
                           icon: const Icon(Icons.skip_next),
                           label: const Text('Abschnitt überspringen'),
                         ),
@@ -788,6 +988,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                     ),
                   ),
                 ),
+                if (showStepPreview) stepPreviewOverlay(context),
               ],
             ),
     );

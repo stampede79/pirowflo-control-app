@@ -7,16 +7,16 @@ import '../widgets/water_header.dart';
 import '../widgets/workout_timeline.dart';
 
 class TrainingScreen extends StatelessWidget {
-  final Workout? todaysWorkout;
+  final List<Workout> todaysWorkouts;
   final List<ScheduledWorkout> upcomingWorkouts;
   final bool calendarLoading;
   final String? calendarError;
-  final VoidCallback onStartWorkout;
+  final void Function(Workout) onStartWorkout;
   final void Function(ScheduledWorkout) onOpenWorkout;
 
   const TrainingScreen({
     super.key,
-    required this.todaysWorkout,
+    required this.todaysWorkouts,
     required this.upcomingWorkouts,
     required this.calendarLoading,
     required this.calendarError,
@@ -78,7 +78,7 @@ class TrainingScreen extends StatelessWidget {
                     ),
                   ),
                 )
-              else if (todaysWorkout == null)
+              else if (todaysWorkouts.isEmpty)
                 const Card(
                   child: Padding(
                     padding: EdgeInsets.all(20),
@@ -86,51 +86,59 @@ class TrainingScreen extends StatelessWidget {
                   ),
                 )
               else
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          todaysWorkout!.name,
-                          style: Theme.of(context).textTheme.headlineSmall,
+                ...todaysWorkouts.map(
+                  (workout) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              workout.name,
+                              style: Theme.of(context).textTheme.headlineSmall,
+                            ),
+
+                            const SizedBox(height: 4),
+
+                            Text(
+                              '${workout.totalDuration.inMinutes} Minuten',
+                              style: Theme.of(context).textTheme.bodyMedium,
+                            ),
+
+                            if (workout.description.isNotEmpty) ...[
+                              const SizedBox(height: 12),
+                              Text(
+                                workout.description,
+                                style: Theme.of(context).textTheme.bodyLarge,
+                              ),
+                            ],
+
+                            const SizedBox(height: 22),
+
+                            Text(
+                              'Ablauf',
+                              style: Theme.of(context).textTheme.titleLarge,
+                            ),
+
+                            const SizedBox(height: 18),
+
+                            WorkoutTimeline(workout: workout),
+
+                            const SizedBox(height: 6),
+
+                            SizedBox(
+                              width: double.infinity,
+                              child: FilledButton.icon(
+                                onPressed: () => onStartWorkout(workout),
+                                icon: const Icon(Icons.play_arrow),
+                                label: const Text('Training starten'),
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '${todaysWorkout!.totalDuration.inMinutes} Minuten',
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-
-                        if (todaysWorkout!.description.isNotEmpty) ...[
-                          const SizedBox(height: 12),
-                          Text(
-                            todaysWorkout!.description,
-                            style: Theme.of(context).textTheme.bodyLarge,
-                          ),
-                        ],
-
-                        const SizedBox(height: 22),
-
-                        Text(
-                          'Ablauf',
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                        const SizedBox(height: 18),
-
-                        WorkoutTimeline(workout: todaysWorkout!),
-
-                        const SizedBox(height: 6),
-
-                        SizedBox(
-                          width: double.infinity,
-                          child: FilledButton.icon(
-                            onPressed: onStartWorkout,
-                            icon: const Icon(Icons.play_arrow),
-                            label: const Text('Training starten'),
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
                 ),

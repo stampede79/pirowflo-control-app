@@ -94,7 +94,7 @@ class _ControlPageState extends State<ControlPage> {
 
   Timer? statusTimer;
 
-  Workout? todaysWorkout;
+  List<Workout> todaysWorkouts = [];
   bool calendarLoading = false;
   String? calendarError;
   List<ScheduledWorkout> upcomingWorkouts = [];
@@ -615,7 +615,7 @@ class _ControlPageState extends State<ControlPage> {
 
       final events = await service.getEventsForDay(DateTime.now());
 
-      Workout? foundWorkout;
+      final foundWorkouts = <Workout>[];
 
       for (final event in events) {
         final workout = WorkoutParser.parse(
@@ -624,15 +624,14 @@ class _ControlPageState extends State<ControlPage> {
         );
 
         if (workout != null) {
-          foundWorkout = workout;
-          break;
+          foundWorkouts.add(workout);
         }
       }
 
       if (!mounted) return;
 
       setState(() {
-        todaysWorkout = foundWorkout;
+        todaysWorkouts = foundWorkouts;
       });
     } catch (e) {
       if (!mounted) return;
@@ -1065,28 +1064,21 @@ class _ControlPageState extends State<ControlPage> {
           smartRowReady: smartRowReady,
           calendarLoading: calendarLoading,
           calendarError: calendarError,
-          todaysWorkout: todaysWorkout,
+          todaysWorkouts: todaysWorkouts,
           nextWorkout: nextWorkout,
-          onStartWorkout: () {
-            if (todaysWorkout != null) {
-              startWorkout(todaysWorkout!);
-            }
-          },
+          onStartWorkout: startWorkout,
           onOpenWorkout: openWorkoutDetail,
         ),
 
         1 => TrainingScreen(
-          todaysWorkout: todaysWorkout,
+          todaysWorkouts: todaysWorkouts,
           upcomingWorkouts: upcomingWorkouts,
           calendarLoading: calendarLoading,
           calendarError: calendarError,
-          onStartWorkout: () {
-            if (todaysWorkout != null) {
-              startWorkout(todaysWorkout!);
-            }
-          },
+          onStartWorkout: startWorkout,
           onOpenWorkout: openWorkoutDetail,
         ),
+
         2 => RowingStatisticsScreen(
           summary: rowingSummary,
           activities: recentRowingActivities,
@@ -1113,13 +1105,74 @@ class _ControlPageState extends State<ControlPage> {
                 : ListView(
                     children: [
                       Text(
-                        'Betriebsmodi',
+                        'Betriebsmodus',
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
+
                       const SizedBox(height: 12),
-                      statusRow('BLE + ANT+', states['combined'] ?? 'UNKNOWN'),
-                      statusRow('Bluetooth', states['bluetooth'] ?? 'UNKNOWN'),
-                      statusRow('ANT+', states['ant'] ?? 'UNKNOWN'),
+
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(18),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 46,
+                                height: 46,
+                                decoration: BoxDecoration(
+                                  color: running
+                                      ? Theme.of(context)
+                                            .colorScheme
+                                            .primaryContainer
+                                      : Theme.of(context)
+                                            .colorScheme
+                                            .surfaceContainerHighest,
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                child: Icon(
+                                  running
+                                      ? Icons.check_circle_outline
+                                      : Icons.power_settings_new,
+                                  color: running
+                                      ? Theme.of(context).colorScheme.primary
+                                      : Theme.of(context).colorScheme.outline,
+                                ),
+                              ),
+
+                              const SizedBox(width: 14),
+
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      running
+                                          ? activeMode
+                                          : 'Kein Betriebsmodus aktiv',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleMedium
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                    ),
+
+                                    if (running) ...[
+                                      const SizedBox(height: 3),
+                                      Text(
+                                        'Aktiv',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodyMedium,
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                       if (error != null) ...[
                         const SizedBox(height: 16),
                         Card(
@@ -1136,55 +1189,61 @@ class _ControlPageState extends State<ControlPage> {
                       ],
                       const SizedBox(height: 24),
 
-                      FilledButton.icon(
-                        onPressed: loading || states['combined'] == 'RUNNING'
-                            ? null
-                            : () => post('/api/start/combined'),
-                        icon: Icon(
-                          states['combined'] == 'RUNNING'
-                              ? Icons.check_circle
-                              : Icons.bluetooth_connected,
+                      if (states['combined'] != 'RUNNING') ...[
+                        FilledButton.icon(
+                          onPressed: loading || states['combined'] == 'RUNNING'
+                              ? null
+                              : () => post('/api/start/combined'),
+                          icon: Icon(
+                            states['combined'] == 'RUNNING'
+                                ? Icons.check_circle
+                                : Icons.bluetooth_connected,
+                          ),
+                          label: Text(
+                            states['combined'] == 'RUNNING'
+                                ? 'BLE + ANT+ aktiv'
+                                : 'BLE + ANT+ starten',
+                          ),
                         ),
-                        label: Text(
-                          states['combined'] == 'RUNNING'
-                              ? 'BLE + ANT+ aktiv'
-                              : 'BLE + ANT+ starten',
-                        ),
-                      ),
-                      const SizedBox(height: 12),
+                        const SizedBox(height: 12),
+                      ],
 
-                      FilledButton.tonalIcon(
-                        onPressed: loading || states['bluetooth'] == 'RUNNING'
-                            ? null
-                            : () => post('/api/start/bluetooth'),
-                        icon: Icon(
-                          states['bluetooth'] == 'RUNNING'
-                              ? Icons.check_circle
-                              : Icons.bluetooth,
+                      if (states['combined'] != 'RUNNING') ...[
+                        FilledButton.tonalIcon(
+                          onPressed: loading || states['bluetooth'] == 'RUNNING'
+                              ? null
+                              : () => post('/api/start/bluetooth'),
+                          icon: Icon(
+                            states['bluetooth'] == 'RUNNING'
+                                ? Icons.check_circle
+                                : Icons.bluetooth,
+                          ),
+                          label: Text(
+                            states['bluetooth'] == 'RUNNING'
+                                ? 'Bluetooth aktiv'
+                                : 'Nur Bluetooth starten',
+                          ),
                         ),
-                        label: Text(
-                          states['bluetooth'] == 'RUNNING'
-                              ? 'Bluetooth aktiv'
-                              : 'Nur Bluetooth starten',
-                        ),
-                      ),
-                      const SizedBox(height: 12),
+                        const SizedBox(height: 12),
+                      ],
 
-                      FilledButton.tonalIcon(
-                        onPressed: loading || states['ant'] == 'RUNNING'
-                            ? null
-                            : () => post('/api/start/ant'),
-                        icon: Icon(
-                          states['ant'] == 'RUNNING'
-                              ? Icons.check_circle
-                              : Icons.watch,
+                      if (states['combined'] != 'RUNNING') ...[
+                        FilledButton.tonalIcon(
+                          onPressed: loading || states['ant'] == 'RUNNING'
+                              ? null
+                              : () => post('/api/start/ant'),
+                          icon: Icon(
+                            states['ant'] == 'RUNNING'
+                                ? Icons.check_circle
+                                : Icons.watch,
+                          ),
+                          label: Text(
+                            states['ant'] == 'RUNNING'
+                                ? 'ANT+ aktiv'
+                                : 'Nur ANT+ starten',
+                          ),
                         ),
-                        label: Text(
-                          states['ant'] == 'RUNNING'
-                              ? 'ANT+ aktiv'
-                              : 'Nur ANT+ starten',
-                        ),
-                      ),
+                      ],
                       const SizedBox(height: 24),
                       OutlinedButton.icon(
                         onPressed: loading || !running

@@ -15,9 +15,9 @@ class HomeScreen extends StatelessWidget {
 
   final bool calendarLoading;
   final String? calendarError;
-  final Workout? todaysWorkout;
+  final List<Workout> todaysWorkouts;
 
-  final VoidCallback onStartWorkout;
+  final void Function(Workout) onStartWorkout;
   final ScheduledWorkout? nextWorkout;
   final void Function(ScheduledWorkout) onOpenWorkout;
 
@@ -29,7 +29,7 @@ class HomeScreen extends StatelessWidget {
     required this.smartRowReady,
     required this.calendarLoading,
     required this.calendarError,
-    required this.todaysWorkout,
+    required this.todaysWorkouts,
     required this.onStartWorkout,
     required this.nextWorkout,
     required this.onOpenWorkout,
@@ -110,7 +110,7 @@ class HomeScreen extends StatelessWidget {
                     ),
                   ),
                 )
-              else if (todaysWorkout == null)
+              else if (todaysWorkouts.isEmpty)
                 Card(
                   child: Padding(
                     padding: const EdgeInsets.all(20),
@@ -129,79 +129,87 @@ class HomeScreen extends StatelessWidget {
                   ),
                 )
               else
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
+                ...todaysWorkouts.map(
+                  (workout) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Container(
-                              width: 46,
-                              height: 46,
-                              decoration: BoxDecoration(
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .primaryContainer,
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              child: Icon(
-                                Icons.rowing,
-                                color: Theme.of(context).colorScheme.primary,
-                              ),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  width: 46,
+                                  height: 46,
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .primaryContainer,
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                  child: Icon(
+                                    Icons.rowing,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .primary,
+                                  ),
+                                ),
+
+                                const SizedBox(width: 14),
+
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        workout.name,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .headlineSmall,
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        '${workout.totalDuration.inMinutes} Minuten',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodyMedium,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ),
 
-                            const SizedBox(width: 14),
+                            if (workout.description.isNotEmpty) ...[
+                              const SizedBox(height: 16),
+                              Text(
+                                workout.description,
+                                style: Theme.of(context).textTheme.bodyLarge,
+                              ),
+                            ],
 
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    todaysWorkout!.name,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .headlineSmall,
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    '${todaysWorkout!.totalDuration.inMinutes} Minuten',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodyMedium,
-                                  ),
-                                ],
+                            const SizedBox(height: 20),
+
+                            SizedBox(
+                              width: double.infinity,
+                              child: FilledButton.icon(
+                                onPressed: () => onStartWorkout(workout),
+                                icon: const Icon(Icons.play_arrow),
+                                label: const Text('Training starten'),
                               ),
                             ),
                           ],
                         ),
-
-                        if (todaysWorkout!.description.isNotEmpty) ...[
-                          const SizedBox(height: 16),
-                          Text(
-                            todaysWorkout!.description,
-                            style: Theme.of(context).textTheme.bodyLarge,
-                          ),
-                        ],
-
-                        const SizedBox(height: 20),
-
-                        SizedBox(
-                          width: double.infinity,
-                          child: FilledButton.icon(
-                            onPressed: onStartWorkout,
-                            icon: const Icon(Icons.play_arrow),
-                            label: const Text('Training starten'),
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
 
-              if (todaysWorkout == null && nextWorkout != null) ...[
+              if (todaysWorkouts.isEmpty && nextWorkout != null) ...[
                 const SizedBox(height: 30),
 
                 const SectionTitle(
