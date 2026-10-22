@@ -9,10 +9,24 @@ workouts loaded from a Nextcloud calendar.
 The app communicates with the
 [PiRowFlo Control API](https://github.com/stampede79/pirowflo-control-api).
 
+## Screenshots
+
 <p align="center">
-  <img src="docs/screenshots/main-screen.png"
-       alt="PiRowFlo Control main screen"
-       width="320">
+  <img src="docs/screenshots/home.png" width="280" alt="PiRowFlo Control Übersicht">
+  &nbsp;&nbsp;
+  <img src="docs/screenshots/training.png" width="280" alt="Trainingsplan">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/live-workout.png" width="280" alt="Live-Training">
+  &nbsp;&nbsp;
+  <img src="docs/screenshots/step-preview.png" width="280" alt="Abschnittsvorschau">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/statistics.png" width="280" alt="Ruderstatistiken">
+  &nbsp;&nbsp;
+  <img src="docs/screenshots/activity-detail.png" width="280" alt="Aktivitätsdetails">
 </p>
 
 ## Features
