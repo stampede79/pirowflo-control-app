@@ -97,11 +97,18 @@ class PiRowFloDrawer extends StatelessWidget {
                   onTap: () => onSelectPage(1),
                 ),
                 _DrawerItem(
+                  icon: Icons.bar_chart_outlined,
+                  selectedIcon: Icons.bar_chart,
+                  title: 'Statistiken',
+                  selected: selectedPage == 2,
+                  onTap: () => onSelectPage(2),
+                ),
+                _DrawerItem(
                   icon: Icons.tune_outlined,
                   selectedIcon: Icons.tune,
                   title: 'PiRowFlo-Steuerung',
-                  selected: selectedPage == 2,
-                  onTap: () => onSelectPage(2),
+                  selected: selectedPage == 3,
+                  onTap: () => onSelectPage(3),
                 ),
 
                 const Padding(

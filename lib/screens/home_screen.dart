@@ -201,7 +201,7 @@ class HomeScreen extends StatelessWidget {
                   ),
                 ),
 
-              if (nextWorkout != null) ...[
+              if (todaysWorkout == null && nextWorkout != null) ...[
                 const SizedBox(height: 30),
 
                 const SectionTitle(

@@ -17,6 +17,10 @@ import 'screens/training_screen.dart';
 import 'screens/workout_detail_screen.dart';
 import 'theme/pirowflo_theme.dart';
 import 'widgets/pirowflo_drawer.dart';
+import 'services/endurain_service.dart';
+import 'models/endurain_summary.dart';
+import 'models/endurain_activity.dart';
+import 'screens/rowing_statistics_screen.dart';
 
 void main() {
   runApp(const PiRowFloApp());
@@ -53,6 +57,21 @@ class _ControlPageState extends State<ControlPage> {
   );
   final nextcloudUserController = TextEditingController();
   final nextcloudPasswordController = TextEditingController();
+
+  final endurainServerController = TextEditingController(
+    text: 'https://endurain.roderwieser.com',
+  );
+  final endurainUserController = TextEditingController();
+  final endurainPasswordController = TextEditingController();
+
+  bool endurainConnected = false;
+  bool endurainLoading = false;
+  String? endurainStatus;
+  EndurainSummary? rowingSummary;
+  bool rowingStatisticsLoading = false;
+  String? rowingStatisticsError;
+  EndurainSummaryPeriod rowingStatisticsPeriod = EndurainSummaryPeriod.week;
+  List<EndurainActivity> recentRowingActivities = [];
 
   String? calendarTestResult;
   int selectedPage = 0;
@@ -95,6 +114,9 @@ class _ControlPageState extends State<ControlPage> {
     calendarUrlController.dispose();
     nextcloudUserController.dispose();
     nextcloudPasswordController.dispose();
+    endurainServerController.dispose();
+    endurainUserController.dispose();
+    endurainPasswordController.dispose();
     super.dispose();
   }
 
@@ -112,6 +134,12 @@ class _ControlPageState extends State<ControlPage> {
     final calendarUrl = await storage.read(key: 'calendarUrl');
     final nextcloudUser = await storage.read(key: 'nextcloudUser');
     final nextcloudPassword = await storage.read(key: 'nextcloudPassword');
+    final endurainServer = await storage.read(key: 'endurainServer');
+    final endurainUser = await storage.read(key: 'endurainUser');
+    final endurainAccessToken = await storage.read(key: 'endurainAccessToken');
+    final endurainRefreshToken = await storage.read(
+      key: 'endurainRefreshToken',
+    );
 
     if (!mounted) return;
 
@@ -123,6 +151,18 @@ class _ControlPageState extends State<ControlPage> {
 
     nextcloudUserController.text = nextcloudUser ?? '';
     nextcloudPasswordController.text = nextcloudPassword ?? '';
+
+    if (endurainServer != null && endurainServer.isNotEmpty) {
+      endurainServerController.text = endurainServer;
+    }
+
+    endurainUserController.text = endurainUser ?? '';
+
+    endurainConnected =
+        endurainAccessToken != null &&
+        endurainAccessToken.isNotEmpty &&
+        endurainRefreshToken != null &&
+        endurainRefreshToken.isNotEmpty;
 
     setState(() {
       configured =
@@ -276,6 +316,129 @@ class _ControlPageState extends State<ControlPage> {
       });
     } catch (_) {
       // Hintergrund-Refresh soll die Oberfläche nicht mit Fehlern fluten.
+    }
+  }
+
+  Future<void> connectEndurain() async {
+    var server = endurainServerController.text.trim();
+    final username = endurainUserController.text.trim();
+    final password = endurainPasswordController.text;
+
+    if (server.endsWith('/')) {
+      server = server.substring(0, server.length - 1);
+    }
+
+    if (server.isEmpty || username.isEmpty || password.isEmpty) {
+      setState(() {
+        endurainStatus = 'Server, Benutzername und Passwort werden benötigt.';
+      });
+      return;
+    }
+
+    setState(() {
+      endurainLoading = true;
+      endurainStatus = null;
+    });
+
+    try {
+      final service = EndurainService(server: server);
+
+      final session = await service.login(
+        username: username,
+        password: password,
+      );
+
+      await service.saveSession(session);
+
+      // Passwort nach erfolgreichem Login sofort verwerfen.
+      endurainPasswordController.clear();
+
+      if (!mounted) return;
+
+      setState(() {
+        endurainServerController.text = server;
+        endurainConnected = true;
+        endurainStatus = 'Mit Endurain verbunden.';
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        endurainConnected = false;
+        endurainStatus = 'Endurain-Verbindung fehlgeschlagen: $e';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          endurainLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> disconnectEndurain() async {
+    await storage.delete(key: 'endurainAccessToken');
+    await storage.delete(key: 'endurainRefreshToken');
+    await storage.delete(key: 'endurainSessionId');
+
+    endurainPasswordController.clear();
+
+    if (!mounted) return;
+
+    setState(() {
+      endurainConnected = false;
+      endurainStatus = 'Endurain-Verbindung getrennt.';
+    });
+  }
+
+  Future<void> loadRowingStatistics() async {
+    final server = endurainServerController.text.trim();
+
+    if (!endurainConnected || server.isEmpty) {
+      if (!mounted) return;
+
+      setState(() {
+        rowingStatisticsError = 'Endurain ist noch nicht verbunden.';
+      });
+
+      return;
+    }
+
+    setState(() {
+      rowingStatisticsLoading = true;
+      rowingStatisticsError = null;
+    });
+
+    try {
+      final service = EndurainService(server: server);
+
+      final results = await Future.wait([
+        service.getRowingSummary(rowingStatisticsPeriod),
+        service.getRecentRowingActivities(),
+      ]);
+
+      final summary = results[0] as EndurainSummary;
+      final activities = results[1] as List<EndurainActivity>;
+
+      if (!mounted) return;
+
+      setState(() {
+        rowingSummary = summary;
+        recentRowingActivities = activities;
+        rowingStatisticsError = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        rowingStatisticsError = 'Statistik konnte nicht geladen werden: $e';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          rowingStatisticsLoading = false;
+        });
+      }
     }
   }
 
@@ -603,6 +766,21 @@ class _ControlPageState extends State<ControlPage> {
     );
   }
 
+  Future<void> changeRowingStatisticsPeriod(
+    EndurainSummaryPeriod period,
+  ) async {
+    if (period == rowingStatisticsPeriod) {
+      return;
+    }
+
+    setState(() {
+      rowingStatisticsPeriod = period;
+      rowingSummary = null;
+    });
+
+    await loadRowingStatistics();
+  }
+
   void showSettings() {
     showDialog(
       context: context,
@@ -690,6 +868,133 @@ class _ControlPageState extends State<ControlPage> {
                   const SizedBox(height: 12),
                   Text(calendarTestResult!),
                 ],
+                const SizedBox(height: 24),
+                const Divider(),
+                const SizedBox(height: 12),
+
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Endurain',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+
+                const SizedBox(height: 12),
+
+                TextField(
+                  controller: endurainServerController,
+                  decoration: const InputDecoration(
+                    labelText: 'Endurain-Server',
+                    hintText: 'https://endurain.example.com',
+                  ),
+                  keyboardType: TextInputType.url,
+                  autocorrect: false,
+                ),
+
+                const SizedBox(height: 12),
+
+                TextField(
+                  controller: endurainUserController,
+                  decoration: const InputDecoration(
+                    labelText: 'Endurain-Benutzer',
+                  ),
+                  autocorrect: false,
+                ),
+
+                const SizedBox(height: 12),
+
+                if (!endurainConnected)
+                  TextField(
+                    controller: endurainPasswordController,
+                    decoration: const InputDecoration(
+                      labelText: 'Endurain-Passwort',
+                    ),
+                    obscureText: true,
+                    autocorrect: false,
+                  ),
+
+                const SizedBox(height: 16),
+
+                if (endurainConnected)
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.check_circle,
+                        color: Colors.green,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Mit Endurain verbunden',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ),
+                    ],
+                  )
+                else
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.circle_outlined,
+                        color: Theme.of(context).colorScheme.outline,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Nicht verbunden',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ),
+                    ],
+                  ),
+
+                const SizedBox(height: 12),
+
+                SizedBox(
+                  width: double.infinity,
+                  child: endurainConnected
+                      ? OutlinedButton.icon(
+                          onPressed: endurainLoading
+                              ? null
+                              : () async {
+                                  await disconnectEndurain();
+                                },
+                          icon: const Icon(Icons.link_off),
+                          label: const Text('Verbindung trennen'),
+                        )
+                      : FilledButton.icon(
+                          onPressed: endurainLoading
+                              ? null
+                              : () async {
+                                  await connectEndurain();
+                                },
+                          icon: endurainLoading
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.link),
+                          label: Text(
+                            endurainLoading
+                                ? 'Verbinde …'
+                                : 'Mit Endurain verbinden',
+                          ),
+                        ),
+                ),
+
+                if (endurainStatus != null) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    endurainStatus!,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
               ],
             ),
           ),
@@ -718,12 +1023,17 @@ class _ControlPageState extends State<ControlPage> {
         title: Text(switch (selectedPage) {
           0 => 'PiRowFlo Control',
           1 => 'Training',
-          2 => 'PiRowFlo-Steuerung',
+          2 => 'Statistiken',
+          3 => 'PiRowFlo-Steuerung',
           _ => 'PiRowFlo Control',
         }),
         actions: [
           IconButton(
-            onPressed: loading ? null : refreshAll,
+            onPressed: loading || rowingStatisticsLoading
+                ? null
+                : selectedPage == 2
+                ? loadRowingStatistics
+                : refreshAll,
             icon: const Icon(Icons.refresh),
             tooltip: 'Aktualisieren',
           ),
@@ -737,6 +1047,10 @@ class _ControlPageState extends State<ControlPage> {
           setState(() {
             selectedPage = page;
           });
+
+          if (page == 2) {
+            loadRowingStatistics();
+          }
         },
         onSettings: () {
           Navigator.pop(context);
@@ -773,8 +1087,17 @@ class _ControlPageState extends State<ControlPage> {
           },
           onOpenWorkout: openWorkoutDetail,
         ),
-
-        _ => SafeArea(
+        2 => RowingStatisticsScreen(
+          summary: rowingSummary,
+          activities: recentRowingActivities,
+          loading: rowingStatisticsLoading,
+          error: rowingStatisticsError,
+          period: rowingStatisticsPeriod,
+          onPeriodChanged: changeRowingStatisticsPeriod,
+          onRefresh: loadRowingStatistics,
+          endurainServer: endurainServerController.text.trim(),
+        ),
+        3 => SafeArea(
           // HIER bleibt dein bisheriger
           // PiRowFlo-Steuerungs-Body,
           child: Padding(
@@ -898,6 +1221,7 @@ class _ControlPageState extends State<ControlPage> {
                   ),
           ),
         ),
+        _ => const SizedBox.shrink(),
       },
     );
   }
