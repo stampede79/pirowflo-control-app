@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 class PiRowFloDrawer extends StatelessWidget {
   final int selectedPage;
@@ -11,6 +12,10 @@ class PiRowFloDrawer extends StatelessWidget {
     required this.onSelectPage,
     required this.onSettings,
   });
+
+  Future<PackageInfo> _packageInfo() {
+    return PackageInfo.fromPlatform();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -138,10 +143,30 @@ class PiRowFloDrawer extends StatelessWidget {
                     size: 18,
                     color: Theme.of(context).colorScheme.primary,
                   ),
+
                   const SizedBox(width: 8),
-                  Text(
-                    'Row. Flow. Repeat.',
-                    style: Theme.of(context).textTheme.bodySmall,
+
+                  Expanded(
+                    child: Text(
+                      'Row. Flow. Repeat.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ),
+
+                  FutureBuilder<PackageInfo>(
+                    future: _packageInfo(),
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData) {
+                        return const SizedBox.shrink();
+                      }
+
+                      return Text(
+                        'v${snapshot.data!.version}',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),
