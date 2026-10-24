@@ -4,6 +4,7 @@ import '../models/endurain_activity.dart';
 import '../models/endurain_stream.dart';
 import '../services/endurain_service.dart';
 import '../widgets/rowing_stream_chart.dart';
+import '../utils/user_friendly_error.dart';
 
 class RowingActivityDetailScreen extends StatefulWidget {
   final EndurainActivity activity;
@@ -86,7 +87,7 @@ class _RowingActivityDetailScreenState
 
       setState(() {
         streamsLoading = false;
-        streamsError = 'Verläufe konnten nicht geladen werden: $e';
+        streamsError = UserFriendlyError.endurain(e);
       });
     }
   }

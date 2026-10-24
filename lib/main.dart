@@ -22,6 +22,7 @@ import 'models/endurain_summary.dart';
 import 'models/endurain_activity.dart';
 import 'screens/rowing_statistics_screen.dart';
 import 'screens/welcome_screen.dart';
+import 'utils/user_friendly_error.dart';
 
 void main() {
   runApp(const PiRowFloApp());
@@ -94,6 +95,15 @@ class _ControlPageState extends State<ControlPage> {
   bool smartRowConnected = false;
   bool smartRowReady = false;
   String? smartRowAdapter;
+
+  // PiRowFlo-Hardwarestatus
+  bool smartRowBluetoothAvailable = false;
+  bool smartRowBluetoothPowered = false;
+  bool smartRowBluetoothSoftBlocked = false;
+  bool smartRowBluetoothHardBlocked = false;
+  String? smartRowBluetoothAdapter;
+
+  bool antAvailable = false;
 
   Timer? statusTimer;
 
@@ -271,6 +281,10 @@ class _ControlPageState extends State<ControlPage> {
       final profiles = data['profiles'];
       final smartrow = data['smartrow'];
 
+      final hardware = data['hardware'];
+      final smartRowBluetooth = hardware?['smartrow_bluetooth'];
+      final antHardware = hardware?['ant'];
+
       if (!mounted) return;
 
       setState(() {
@@ -284,12 +298,22 @@ class _ControlPageState extends State<ControlPage> {
         smartRowConnected = smartrow?['connected'] == true;
         smartRowReady = smartrow?['services_resolved'] == true;
         smartRowAdapter = smartrow?['adapter']?.toString();
+
+        smartRowBluetoothAvailable = smartRowBluetooth?['available'] == true;
+        smartRowBluetoothPowered = smartRowBluetooth?['powered'] == true;
+        smartRowBluetoothSoftBlocked =
+            smartRowBluetooth?['soft_blocked'] == true;
+        smartRowBluetoothHardBlocked =
+            smartRowBluetooth?['hard_blocked'] == true;
+        smartRowBluetoothAdapter = smartRowBluetooth?['adapter']?.toString();
+
+        antAvailable = antHardware?['available'] == true;
       });
     } catch (e) {
       if (!mounted) return;
 
       setState(() {
-        error = 'PiRowFlo nicht erreichbar: $e';
+        error = UserFriendlyError.piRowFlo(e);
       });
     } finally {
       if (mounted) {
@@ -319,6 +343,10 @@ class _ControlPageState extends State<ControlPage> {
       final profiles = data['profiles'];
       final smartrow = data['smartrow'];
 
+      final hardware = data['hardware'];
+      final smartRowBluetooth = hardware?['smartrow_bluetooth'];
+      final antHardware = hardware?['ant'];
+
       if (!mounted) return;
 
       setState(() {
@@ -332,6 +360,16 @@ class _ControlPageState extends State<ControlPage> {
         smartRowConnected = smartrow?['connected'] == true;
         smartRowReady = smartrow?['services_resolved'] == true;
         smartRowAdapter = smartrow?['adapter']?.toString();
+
+        smartRowBluetoothAvailable = smartRowBluetooth?['available'] == true;
+        smartRowBluetoothPowered = smartRowBluetooth?['powered'] == true;
+        smartRowBluetoothSoftBlocked =
+            smartRowBluetooth?['soft_blocked'] == true;
+        smartRowBluetoothHardBlocked =
+            smartRowBluetooth?['hard_blocked'] == true;
+        smartRowBluetoothAdapter = smartRowBluetooth?['adapter']?.toString();
+
+        antAvailable = antHardware?['available'] == true;
       });
     } catch (_) {
       // Hintergrund-Refresh soll die Oberfläche nicht mit Fehlern fluten.
@@ -450,7 +488,7 @@ class _ControlPageState extends State<ControlPage> {
       if (!mounted) return;
 
       setState(() {
-        rowingStatisticsError = 'Statistik konnte nicht geladen werden: $e';
+        rowingStatisticsError = UserFriendlyError.endurain(e);
       });
     } finally {
       if (mounted) {
@@ -534,6 +572,42 @@ class _ControlPageState extends State<ControlPage> {
     return 'Gestoppt';
   }
 
+  bool get bluetoothRequired =>
+      states['combined'] == 'RUNNING' || states['bluetooth'] == 'RUNNING';
+
+  bool get antRequired =>
+      states['combined'] == 'RUNNING' || states['ant'] == 'RUNNING';
+
+  bool get smartRowBluetoothHealthy =>
+      smartRowBluetoothAvailable &&
+      smartRowBluetoothPowered &&
+      !smartRowBluetoothSoftBlocked &&
+      !smartRowBluetoothHardBlocked;
+
+  String get smartRowBluetoothStatusText {
+    if (!smartRowBluetoothAvailable) {
+      return 'Adapter nicht gefunden';
+    }
+
+    if (smartRowBluetoothHardBlocked) {
+      return 'Hardwareseitig blockiert';
+    }
+
+    if (smartRowBluetoothSoftBlocked) {
+      return 'Adapter blockiert';
+    }
+
+    if (!smartRowBluetoothPowered) {
+      return 'Adapter ausgeschaltet';
+    }
+
+    if (smartRowBluetoothAdapter != null) {
+      return '${smartRowBluetoothAdapter!} bereit';
+    }
+
+    return 'Bereit';
+  }
+
   bool get running =>
       states.values.any((state) => state.toUpperCase() == 'RUNNING');
 
@@ -606,7 +680,7 @@ class _ControlPageState extends State<ControlPage> {
       if (!mounted) return;
 
       setState(() {
-        calendarTestResult = 'Kalenderfehler: $e';
+        calendarTestResult = UserFriendlyError.nextcloud(e);
       });
     }
   }
@@ -656,7 +730,7 @@ class _ControlPageState extends State<ControlPage> {
       if (!mounted) return;
 
       setState(() {
-        calendarError = 'Trainingskalender nicht erreichbar: $e';
+        calendarError = UserFriendlyError.nextcloud(e);
       });
     } finally {
       if (mounted) {
@@ -1195,6 +1269,61 @@ class _ControlPageState extends State<ControlPage> {
                           ),
                         ),
                       ),
+                      const SizedBox(height: 24),
+
+                      Text(
+                        'Systemstatus',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 18,
+                            vertical: 10,
+                          ),
+                          child: Column(
+                            children: [
+                              _SystemStatusRow(
+                                icon: Icons.rowing,
+                                title: 'SmartRow',
+                                status: smartRowReady
+                                    ? 'Verbunden'
+                                    : smartRowConnected
+                                    ? 'Verbindung wird vorbereitet'
+                                    : 'Nicht verbunden',
+                                healthy: smartRowReady,
+                              ),
+
+                              const Divider(height: 1),
+
+                              _SystemStatusRow(
+                                icon: Icons.bluetooth,
+                                title: 'Bluetooth',
+                                status: smartRowBluetoothStatusText,
+                                healthy: smartRowBluetoothHealthy,
+                                warning:
+                                    bluetoothRequired &&
+                                    !smartRowBluetoothHealthy,
+                              ),
+
+                              const Divider(height: 1),
+
+                              _SystemStatusRow(
+                                icon: Icons.watch,
+                                title: 'ANT+',
+                                status: antAvailable
+                                    ? 'Adapter erkannt'
+                                    : 'Adapter nicht gefunden',
+                                healthy: antAvailable,
+                                warning: antRequired && !antAvailable,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                       if (error != null) ...[
                         const SizedBox(height: 16),
                         Card(
@@ -1304,6 +1433,71 @@ class _ControlPageState extends State<ControlPage> {
         ),
         _ => const SizedBox.shrink(),
       },
+    );
+  }
+}
+
+class _SystemStatusRow extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String status;
+  final bool healthy;
+  final bool warning;
+
+  const _SystemStatusRow({
+    required this.icon,
+    required this.title,
+    required this.status,
+    required this.healthy,
+    this.warning = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = warning
+        ? Theme.of(context).colorScheme.error
+        : healthy
+        ? Theme.of(context).colorScheme.primary
+        : Theme.of(context).colorScheme.outline;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 7),
+      child: Row(
+        children: [
+          Icon(
+            warning
+                ? Icons.warning_amber_rounded
+                : healthy
+                ? Icons.check_circle_outline
+                : Icons.radio_button_unchecked,
+            size: 22,
+            color: color,
+          ),
+          const SizedBox(width: 12),
+          Icon(
+            icon,
+            size: 20,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              title,
+              style: Theme.of(context).textTheme.bodyLarge
+                  ?.copyWith(fontWeight: FontWeight.w600),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Flexible(
+            child: Text(
+              status,
+              textAlign: TextAlign.end,
+              style: Theme.of(context).textTheme.bodyMedium
+                  ?.copyWith(color: color),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
