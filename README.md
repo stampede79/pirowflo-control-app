@@ -632,11 +632,23 @@ Verify:
 - The Endurain session can be refreshed if the access token has expired
 
 ---
+## Releases
 
-## Current limitations / planned work
+### v0.1.1
 
-The following areas are not implemented or are candidates for future development:
+- SmartRow reset directly from a running workout
+- Improved user-friendly error messages for Nextcloud, Endurain and PiRowFlo
+- PiRowFlo hardware status for SmartRow Bluetooth and ANT+
+- Detection of unavailable, powered-off and RF-kill-blocked SmartRow Bluetooth adapters
+- Improved system status display in PiRowFlo Control
 
+### v0.1.0
+
+Initial public release.
+
+## Roadmap
+
+- Linking a planned PiRowFlo workout with the corresponding completed Endurain activity
 - Persisting PiRowFlo workout-runner results
 - Synchronizing completed planned workouts back to Nextcloud
 - Linking a planned PiRowFlo workout with the corresponding completed Endurain activity
