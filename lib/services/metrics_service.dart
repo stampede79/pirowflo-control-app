@@ -23,4 +23,14 @@ class MetricsService {
 
     return RowingMetrics.fromJson(json as Map<String, dynamic>);
   }
+
+  Future<void> resetSmartRow() async {
+    final response = await http
+        .post(Uri.parse('$server/api/reset'), headers: {'X-API-Key': apiKey})
+        .timeout(const Duration(seconds: 5));
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('HTTP ${response.statusCode}');
+    }
+  }
 }

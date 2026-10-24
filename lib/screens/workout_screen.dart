@@ -726,6 +726,66 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     );
   }
 
+  Future<void> resetSmartRow() async {
+    if (metrics?.smartRowReady != true) {
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('SmartRow zurücksetzen?'),
+        content: const Text(
+          'Die aktuellen SmartRow-Werte wie Distanz und Zeit '
+          'werden zurückgesetzt.\n\n'
+          'Das laufende Training und der aktuelle Abschnitt '
+          'bleiben unverändert.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Abbrechen'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Zurücksetzen'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) {
+      return;
+    }
+
+    try {
+      final service = MetricsService(
+        server: widget.server,
+        apiKey: widget.apiKey,
+      );
+
+      await service.resetSmartRow();
+
+      if (!mounted) return;
+
+      await loadMetrics();
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('SmartRow wurde zurückgesetzt.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('SmartRow konnte nicht zurückgesetzt werden: $e'),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final step = currentStep;
@@ -801,16 +861,33 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                         const SizedBox(height: 28),
 
                         Center(
-                          child: WorkoutPowerGauge(
-                            progress: progress,
-                            powerW: metrics?.smartRowReady == true
-                                ? metrics!.powerW
-                                : 0,
-                            targetPowerMin: step.targetPowerMin,
-                            targetPowerMax: step.targetPowerMax,
-                            powerColor: metrics?.smartRowReady == true
-                                ? powerColor(context, step, metrics!)
-                                : Theme.of(context).colorScheme.primary,
+                          child: Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              WorkoutPowerGauge(
+                                progress: progress,
+                                powerW: metrics?.smartRowReady == true
+                                    ? metrics!.powerW
+                                    : 0,
+                                targetPowerMin: step.targetPowerMin,
+                                targetPowerMax: step.targetPowerMax,
+                                powerColor: metrics?.smartRowReady == true
+                                    ? powerColor(context, step, metrics!)
+                                    : Theme.of(context).colorScheme.primary,
+                              ),
+
+                              Positioned(
+                                right: -8,
+                                bottom: -8,
+                                child: IconButton.filledTonal(
+                                  onPressed: metrics?.smartRowReady == true
+                                      ? resetSmartRow
+                                      : null,
+                                  tooltip: 'SmartRow zurücksetzen',
+                                  icon: const Icon(Icons.refresh),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
 
