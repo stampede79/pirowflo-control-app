@@ -290,6 +290,84 @@ class EndurainService {
         .toList();
   }
 
+  Future<List<EndurainActivity>> getRowingActivitiesForRange(
+    DateTime start,
+    DateTime end,
+  ) async {
+    final accessToken = await storage.read(key: 'endurainAccessToken');
+
+    if (accessToken == null || accessToken.isEmpty) {
+      throw Exception('Keine Endurain-Session vorhanden.');
+    }
+
+    final userId = _userIdFromAccessToken(accessToken);
+
+    final rangeStart = start.toLocal();
+    final rangeEnd = end.toLocal();
+
+    const pageSize = 50;
+    const maxPages = 20;
+
+    final activities = <EndurainActivity>[];
+
+    for (var page = 1; page <= maxPages; page++) {
+      final response = await authenticatedGet(
+        '/activities/user/$userId/'
+        'page_number/$page/'
+        'num_records/$pageSize',
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception(
+          'Endurain Aktivitäten konnten nicht geladen werden '
+          '(HTTP ${response.statusCode}): ${response.body}',
+        );
+      }
+
+      final json = jsonDecode(response.body);
+
+      if (json is! List) {
+        throw const FormatException('Ungültige Endurain Aktivitäten-Antwort');
+      }
+
+      if (json.isEmpty) {
+        break;
+      }
+
+      final pageActivities = json
+          .whereType<Map<String, dynamic>>()
+          .map(EndurainActivity.fromJson)
+          .toList();
+
+      for (final activity in pageActivities) {
+        if (activity.activityType != 13) {
+          continue;
+        }
+
+        final activityStart = activity.startTime.toLocal();
+
+        if (!activityStart.isBefore(rangeStart) &&
+            activityStart.isBefore(rangeEnd)) {
+          activities.add(activity);
+        }
+      }
+
+      // Wenn bereits irgendeine Activity dieser Seite älter als unser
+      // Startdatum ist, brauchen wir keine noch älteren Seiten mehr.
+      final reachedStart = pageActivities.any(
+        (activity) => activity.startTime.toLocal().isBefore(rangeStart),
+      );
+
+      if (reachedStart || pageActivities.length < pageSize) {
+        break;
+      }
+    }
+
+    activities.sort((a, b) => b.startTime.compareTo(a.startTime));
+
+    return activities;
+  }
+
   Future<List<EndurainStream>> getActivityStreams(int activityId) async {
     final response = await authenticatedGet(
       '/activities_streams/activity_id/$activityId/all',

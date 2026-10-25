@@ -23,6 +23,12 @@ import 'models/endurain_activity.dart';
 import 'screens/rowing_statistics_screen.dart';
 import 'screens/welcome_screen.dart';
 import 'utils/user_friendly_error.dart';
+import 'models/recent_workout_match.dart';
+import 'services/recent_workout_matcher.dart';
+import 'models/pirowflo_result.dart';
+import 'services/pirowflo_result_parser.dart';
+import 'models/training_history_entry.dart';
+import 'services/training_history_merger.dart';
 
 void main() {
   runApp(const PiRowFloApp());
@@ -74,6 +80,13 @@ class _ControlPageState extends State<ControlPage> {
   String? rowingStatisticsError;
   EndurainSummaryPeriod rowingStatisticsPeriod = EndurainSummaryPeriod.week;
   List<EndurainActivity> recentRowingActivities = [];
+  List<RecentWorkoutMatch> recentWorkoutMatches = [];
+  List<ScheduledWorkout> workoutHistory = [];
+  List<EndurainActivity> historyActivities = [];
+  List<TrainingHistoryEntry> trainingHistory = [];
+  int historyDays = 30;
+  bool historyLoadingMore = false;
+  bool historyHasMore = true;
 
   String? calendarTestResult;
   int selectedPage = 0;
@@ -111,12 +124,95 @@ class _ControlPageState extends State<ControlPage> {
   bool calendarLoading = false;
   String? calendarError;
   List<ScheduledWorkout> upcomingWorkouts = [];
+  List<ScheduledWorkout> recentWorkouts = [];
+
   ScheduledWorkout? get nextWorkout =>
       upcomingWorkouts.isEmpty ? null : upcomingWorkouts.first;
   @override
   void initState() {
     super.initState();
     initializeApp();
+  }
+
+  Future<void> loadMoreHistory() async {
+    if (historyLoadingMore || !historyHasMore) {
+      return;
+    }
+
+    final previousCount = trainingHistory.length;
+
+    setState(() {
+      historyLoadingMore = true;
+    });
+
+    try {
+      const stepDays = 30;
+      const maxStepsPerLoad = 12;
+
+      var foundOlderEntries = false;
+
+      for (var step = 0; step < maxStepsPerLoad; step++) {
+        historyDays += stepDays;
+
+        await Future.wait([loadWorkoutHistory(), loadHistoryActivities()]);
+
+        if (!mounted) return;
+
+        if (trainingHistory.length > previousCount) {
+          foundOlderEntries = true;
+          break;
+        }
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        historyHasMore = foundOlderEntries;
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          historyLoadingMore = false;
+        });
+      }
+    }
+  }
+
+  Future<void> loadHistoryActivities() async {
+    final server = endurainServerController.text.trim();
+
+    if (!endurainConnected || server.isEmpty) {
+      if (!mounted) return;
+
+      setState(() {
+        historyActivities = [];
+      });
+      resolveTrainingHistory();
+
+      return;
+    }
+
+    try {
+      final now = DateTime.now();
+
+      final today = DateTime(now.year, now.month, now.day);
+
+      final start = today.subtract(Duration(days: historyDays));
+      final end = today.add(const Duration(days: 1));
+
+      final service = EndurainService(server: server);
+
+      final activities = await service.getRowingActivitiesForRange(start, end);
+
+      if (!mounted) return;
+
+      setState(() {
+        historyActivities = activities;
+      });
+      resolveTrainingHistory();
+    } catch (_) {
+      // Historie darf den normalen App-Refresh nicht blockieren.
+    }
   }
 
   Future<void> initializeApp() async {
@@ -154,7 +250,181 @@ class _ControlPageState extends State<ControlPage> {
       refreshStatus(),
       loadTodaysWorkout(),
       loadUpcomingWorkouts(),
+      loadRecentWorkouts(),
+      loadRecentActivitiesForMatching(),
+      loadWorkoutHistory(),
+      loadHistoryActivities(),
     ]);
+  }
+
+  Future<void> linkWorkoutToActivity(
+    ScheduledWorkout scheduled,
+    EndurainActivity activity,
+  ) async {
+    final calendarUrl = calendarUrlController.text.trim();
+    final username = nextcloudUserController.text.trim();
+    final password = nextcloudPasswordController.text;
+
+    if (calendarUrl.isEmpty || username.isEmpty || password.isEmpty) {
+      throw Exception('Nextcloud-Konfiguration unvollständig.');
+    }
+
+    final service = NextcloudCalendarService(
+      calendarUrl: calendarUrl,
+      username: username,
+      appPassword: password,
+    );
+
+    final result = PiRowFloResult(
+      endurainActivityId: activity.id,
+      linkedAt: DateTime.now(),
+    );
+
+    final updatedDescription = PiRowFloResultParser.upsert(
+      scheduled.calendarEvent.description,
+      result,
+    );
+
+    await service.updateEventDescription(
+      scheduled.calendarEvent,
+      updatedDescription,
+    );
+
+    await Future.wait([loadTodaysWorkout(), loadRecentWorkouts()]);
+
+    resolveRecentWorkoutMatches();
+  }
+
+  Future<void> loadWorkoutHistory() async {
+    final calendarUrl = calendarUrlController.text.trim();
+    final username = nextcloudUserController.text.trim();
+    final password = nextcloudPasswordController.text;
+
+    if (calendarUrl.isEmpty || username.isEmpty || password.isEmpty) {
+      if (!mounted) return;
+
+      setState(() {
+        workoutHistory = [];
+      });
+      resolveTrainingHistory();
+      return;
+    }
+
+    try {
+      final service = NextcloudCalendarService(
+        calendarUrl: calendarUrl,
+        username: username,
+        appPassword: password,
+      );
+
+      final now = DateTime.now();
+
+      final today = DateTime(now.year, now.month, now.day);
+
+      final start = today.subtract(Duration(days: historyDays));
+
+      final end = today.add(const Duration(days: 1));
+
+      final events = await service.getEventsForRange(start, end);
+
+      final workouts = <ScheduledWorkout>[];
+
+      for (final event in events) {
+        final workout = WorkoutParser.parse(
+          name: event.summary,
+          description: event.description,
+        );
+
+        if (workout == null) {
+          continue;
+        }
+
+        workouts.add(
+          ScheduledWorkout(
+            start: event.start.toLocal(),
+            workout: workout,
+            calendarEvent: event,
+          ),
+        );
+      }
+
+      workouts.sort((a, b) => b.start.compareTo(a.start));
+
+      if (!mounted) return;
+
+      setState(() {
+        workoutHistory = workouts;
+      });
+      resolveTrainingHistory();
+    } catch (_) {
+      // Historie darf den normalen Trainingskalender nicht blockieren.
+    }
+  }
+
+  Future<void> loadRecentWorkouts() async {
+    final calendarUrl = calendarUrlController.text.trim();
+    final username = nextcloudUserController.text.trim();
+    final password = nextcloudPasswordController.text;
+
+    if (calendarUrl.isEmpty || username.isEmpty || password.isEmpty) {
+      if (!mounted) return;
+
+      setState(() {
+        recentWorkouts = [];
+        resolveRecentWorkoutMatches();
+      });
+      return;
+    }
+
+    try {
+      final service = NextcloudCalendarService(
+        calendarUrl: calendarUrl,
+        username: username,
+        appPassword: password,
+      );
+
+      final now = DateTime.now();
+
+      final today = DateTime(now.year, now.month, now.day);
+
+      final start = today.subtract(const Duration(days: 7));
+
+      final end = today.add(const Duration(days: 1));
+
+      final events = await service.getEventsForRange(start, end);
+
+      final workouts = <ScheduledWorkout>[];
+
+      for (final event in events) {
+        final workout = WorkoutParser.parse(
+          name: event.summary,
+          description: event.description,
+        );
+
+        if (workout == null) {
+          continue;
+        }
+
+        workouts.add(
+          ScheduledWorkout(
+            start: event.start.toLocal(),
+            workout: workout,
+            calendarEvent: event,
+          ),
+        );
+      }
+
+      workouts.sort((a, b) => b.start.compareTo(a.start));
+
+      if (!mounted) return;
+
+      setState(() {
+        recentWorkouts = workouts;
+      });
+    } catch (_) {
+      // Fehler beim Laden vergangener Trainings soll den normalen
+      // Trainingskalender nicht blockieren.
+    }
   }
 
   Future<void> loadConfiguration() async {
@@ -206,6 +476,10 @@ class _ControlPageState extends State<ControlPage> {
     }
     await loadTodaysWorkout();
     await loadUpcomingWorkouts();
+    await loadRecentWorkouts();
+    await loadRecentActivitiesForMatching();
+    await loadWorkoutHistory();
+    await loadHistoryActivities();
   }
 
   Future<void> saveConfiguration() async {
@@ -251,11 +525,41 @@ class _ControlPageState extends State<ControlPage> {
     }
     await loadTodaysWorkout();
     await loadUpcomingWorkouts();
+    await loadRecentWorkouts();
+    await loadRecentActivitiesForMatching();
+    await loadWorkoutHistory();
+    await loadHistoryActivities();
   }
 
   Map<String, String> get headers => {
     'X-API-Key': apiKeyController.text.trim(),
   };
+
+  void resolveRecentWorkoutMatches() {
+    final matches = RecentWorkoutMatcher.resolve(
+      recentWorkouts,
+      recentRowingActivities,
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+      recentWorkoutMatches = matches;
+    });
+  }
+
+  void resolveTrainingHistory() {
+    final history = TrainingHistoryMerger.merge(
+      workoutHistory,
+      historyActivities,
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+      trainingHistory = history;
+    });
+  }
 
   Future<void> refreshStatus() async {
     if (!configured) return;
@@ -448,6 +752,38 @@ class _ControlPageState extends State<ControlPage> {
     });
   }
 
+  Future<void> loadRecentActivitiesForMatching() async {
+    final server = endurainServerController.text.trim();
+
+    if (!endurainConnected || server.isEmpty) {
+      if (!mounted) return;
+
+      setState(() {
+        recentRowingActivities = [];
+      });
+
+      resolveRecentWorkoutMatches();
+      return;
+    }
+
+    try {
+      final service = EndurainService(server: server);
+
+      final activities = await service.getRecentRowingActivities(limit: 20);
+
+      if (!mounted) return;
+
+      setState(() {
+        recentRowingActivities = activities;
+      });
+
+      resolveRecentWorkoutMatches();
+    } catch (_) {
+      // Matching darf den normalen App-Refresh nicht blockieren.
+      // Die Statistikseite zeigt ihre eigenen Endurain-Fehler weiterhin separat.
+    }
+  }
+
   Future<void> loadRowingStatistics() async {
     final server = endurainServerController.text.trim();
 
@@ -483,6 +819,7 @@ class _ControlPageState extends State<ControlPage> {
         rowingSummary = summary;
         recentRowingActivities = activities;
         rowingStatisticsError = null;
+        resolveRecentWorkoutMatches();
       });
     } catch (e) {
       if (!mounted) return;
@@ -716,9 +1053,17 @@ class _ControlPageState extends State<ControlPage> {
           description: event.description,
         );
 
-        if (workout != null) {
-          foundWorkouts.add(workout);
+        if (workout == null) {
+          continue;
         }
+
+        final result = PiRowFloResultParser.parse(event.description);
+
+        if (result != null) {
+          continue;
+        }
+
+        foundWorkouts.add(workout);
       }
 
       if (!mounted) return;
@@ -798,7 +1143,13 @@ class _ControlPageState extends State<ControlPage> {
           continue;
         }
 
-        workouts.add(ScheduledWorkout(start: eventDate, workout: workout));
+        workouts.add(
+          ScheduledWorkout(
+            start: eventDate,
+            workout: workout,
+            calendarEvent: event,
+          ),
+        );
       }
 
       workouts.sort((a, b) => a.start.compareTo(b.start));
@@ -1169,21 +1520,33 @@ class _ControlPageState extends State<ControlPage> {
         1 => TrainingScreen(
           todaysWorkouts: todaysWorkouts,
           upcomingWorkouts: upcomingWorkouts,
+          trainingHistory: trainingHistory,
           calendarLoading: calendarLoading,
           calendarError: calendarError,
+          endurainServer: endurainServerController.text.trim(),
           onStartWorkout: startWorkout,
+          historyLoadingMore: historyLoadingMore,
+          onLoadMoreHistory: loadMoreHistory,
+          historyHasMore: historyHasMore,
           onOpenWorkout: openWorkoutDetail,
+          onLinkWorkout: (match) async {
+            final activity = match.candidate?.activity;
+
+            if (activity == null) {
+              return;
+            }
+
+            await linkWorkoutToActivity(match.scheduledWorkout, activity);
+          },
         ),
 
         2 => RowingStatisticsScreen(
           summary: rowingSummary,
-          activities: recentRowingActivities,
           loading: rowingStatisticsLoading,
           error: rowingStatisticsError,
           period: rowingStatisticsPeriod,
           onPeriodChanged: changeRowingStatisticsPeriod,
           onRefresh: loadRowingStatistics,
-          endurainServer: endurainServerController.text.trim(),
         ),
         3 => SafeArea(
           // HIER bleibt dein bisheriger

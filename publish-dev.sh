@@ -34,7 +34,10 @@ flutter test
 
 echo
 echo "[3/5] Building DEV APK"
-flutter build apk --flavor dev --debug
+flutter build apk \
+  --flavor dev \
+  --debug \
+  --target-platform android-arm64
 
 if [ ! -f "$APK_SOURCE" ]; then
     echo "ERROR: APK not found: $APK_SOURCE"
