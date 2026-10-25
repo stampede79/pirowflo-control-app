@@ -29,6 +29,8 @@ import 'models/pirowflo_result.dart';
 import 'services/pirowflo_result_parser.dart';
 import 'models/training_history_entry.dart';
 import 'services/training_history_merger.dart';
+import 'models/training_plan_draft.dart';
+import 'services/training_plan_service.dart';
 
 void main() {
   runApp(const PiRowFloApp());
@@ -87,6 +89,9 @@ class _ControlPageState extends State<ControlPage> {
   int historyDays = 30;
   bool historyLoadingMore = false;
   bool historyHasMore = true;
+  TrainingPlanDraft? trainingPlanDraft;
+  bool trainingPlanDraftLoading = false;
+  String? trainingPlanDraftError;
 
   String? calendarTestResult;
   int selectedPage = 0;
@@ -173,6 +178,54 @@ class _ControlPageState extends State<ControlPage> {
       if (mounted) {
         setState(() {
           historyLoadingMore = false;
+        });
+      }
+    }
+  }
+
+  Future<void> loadTrainingPlanDraft() async {
+    final server = serverController.text.trim();
+    final apiKey = apiKeyController.text.trim();
+
+    if (!configured || server.isEmpty || apiKey.isEmpty) {
+      if (!mounted) return;
+
+      setState(() {
+        trainingPlanDraft = null;
+        trainingPlanDraftError = null;
+        trainingPlanDraftLoading = false;
+      });
+
+      return;
+    }
+
+    setState(() {
+      trainingPlanDraftLoading = true;
+      trainingPlanDraftError = null;
+    });
+
+    try {
+      final service = TrainingPlanService(server: server, apiKey: apiKey);
+
+      final draft = await service.getDraft();
+
+      if (!mounted) return;
+
+      setState(() {
+        trainingPlanDraft = draft;
+        trainingPlanDraftError = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        trainingPlanDraft = null;
+        trainingPlanDraftError = e.toString();
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          trainingPlanDraftLoading = false;
         });
       }
     }
@@ -480,6 +533,7 @@ class _ControlPageState extends State<ControlPage> {
     await loadRecentActivitiesForMatching();
     await loadWorkoutHistory();
     await loadHistoryActivities();
+    await loadTrainingPlanDraft();
   }
 
   Future<void> saveConfiguration() async {
@@ -529,6 +583,7 @@ class _ControlPageState extends State<ControlPage> {
     await loadRecentActivitiesForMatching();
     await loadWorkoutHistory();
     await loadHistoryActivities();
+    await loadTrainingPlanDraft();
   }
 
   Map<String, String> get headers => {
@@ -1224,6 +1279,22 @@ class _ControlPageState extends State<ControlPage> {
     await loadRowingStatistics();
   }
 
+  Future<void> applyTrainingPlanDraft() async {
+    final service = TrainingPlanService(
+      server: serverController.text.trim(),
+      apiKey: apiKeyController.text.trim(),
+    );
+
+    await service.applyDraft();
+
+    await Future.wait([
+      loadTrainingPlanDraft(),
+      loadTodaysWorkout(),
+      loadUpcomingWorkouts(),
+      loadWorkoutHistory(),
+    ]);
+  }
+
   void showSettings() {
     showDialog(
       context: context,
@@ -1529,6 +1600,7 @@ class _ControlPageState extends State<ControlPage> {
           onLoadMoreHistory: loadMoreHistory,
           historyHasMore: historyHasMore,
           onOpenWorkout: openWorkoutDetail,
+          onApplyTrainingPlan: applyTrainingPlanDraft,
           onLinkWorkout: (match) async {
             final activity = match.candidate?.activity;
 
@@ -1538,6 +1610,8 @@ class _ControlPageState extends State<ControlPage> {
 
             await linkWorkoutToActivity(match.scheduledWorkout, activity);
           },
+          trainingPlanDraft: trainingPlanDraft,
+          trainingPlanDraftLoading: trainingPlanDraftLoading,
         ),
 
         2 => RowingStatisticsScreen(

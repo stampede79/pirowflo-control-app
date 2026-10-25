@@ -10,6 +10,8 @@ import '../models/endurain_activity.dart';
 import '../utils/user_friendly_error.dart';
 import 'rowing_activity_detail_screen.dart';
 import '../models/training_history_entry.dart';
+import '../models/training_plan_draft.dart';
+import 'training_plan_draft_screen.dart';
 
 class TrainingScreen extends StatelessWidget {
   final List<Workout> todaysWorkouts;
@@ -24,6 +26,9 @@ class TrainingScreen extends StatelessWidget {
   final bool historyLoadingMore;
   final Future<void> Function() onLoadMoreHistory;
   final bool historyHasMore;
+  final TrainingPlanDraft? trainingPlanDraft;
+  final bool trainingPlanDraftLoading;
+  final Future<void> Function() onApplyTrainingPlan;
 
   const TrainingScreen({
     super.key,
@@ -39,6 +44,9 @@ class TrainingScreen extends StatelessWidget {
     required this.historyLoadingMore,
     required this.onLoadMoreHistory,
     required this.historyHasMore,
+    required this.trainingPlanDraft,
+    required this.trainingPlanDraftLoading,
+    required this.onApplyTrainingPlan,
   });
 
   String _formatHistoryDate(DateTime date) {
@@ -164,6 +172,21 @@ class TrainingScreen extends StatelessWidget {
                     ),
                   ),
                 ),
+              if (trainingPlanDraft != null) ...[
+                const SizedBox(height: 32),
+
+                const SectionTitle(
+                  'Neuer Trainingsplan',
+                  icon: Icons.auto_awesome_outlined,
+                ),
+
+                const SizedBox(height: 12),
+
+                _TrainingPlanDraftTile(
+                  draft: trainingPlanDraft!,
+                  onApply: onApplyTrainingPlan,
+                ),
+              ],
               if (trainingHistory.isNotEmpty) ...[
                 const SizedBox(height: 32),
 
@@ -267,6 +290,109 @@ class TrainingScreen extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _TrainingPlanDraftTile extends StatelessWidget {
+  final TrainingPlanDraft draft;
+  final Future<void> Function() onApply;
+
+  const _TrainingPlanDraftTile({required this.draft, required this.onApply});
+
+  String get _monthName {
+    final parts = draft.targetMonth.split('-');
+
+    if (parts.length != 2) {
+      return draft.targetMonth;
+    }
+
+    final year = int.tryParse(parts[0]);
+    final month = int.tryParse(parts[1]);
+
+    const months = [
+      '',
+      'Januar',
+      'Februar',
+      'März',
+      'April',
+      'Mai',
+      'Juni',
+      'Juli',
+      'August',
+      'September',
+      'Oktober',
+      'November',
+      'Dezember',
+    ];
+
+    if (year == null || month == null || month < 1 || month > 12) {
+      return draft.targetMonth;
+    }
+
+    return '${months[month]} $year';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return Material(
+      color: colors.secondaryContainer,
+      borderRadius: BorderRadius.circular(14),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        // Vorschau folgt im nächsten Schritt.
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) =>
+                  TrainingPlanDraftScreen(draft: draft, onApply: onApply),
+            ),
+          );
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          child: Row(
+            children: [
+              Icon(
+                Icons.auto_awesome,
+                color: colors.onSecondaryContainer,
+                size: 26,
+              ),
+
+              const SizedBox(width: 12),
+
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _monthName,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: colors.onSecondaryContainer,
+                      ),
+                    ),
+
+                    const SizedBox(height: 4),
+
+                    Text(
+                      '${draft.workouts.length} Einheiten · '
+                      '${draft.sessionsPerWeek} pro Woche',
+                      style: Theme.of(context).textTheme.bodyMedium
+                          ?.copyWith(color: colors.onSecondaryContainer),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+
+              Icon(Icons.chevron_right, color: colors.onSecondaryContainer),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
