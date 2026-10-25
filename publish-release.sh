@@ -2,6 +2,27 @@
 
 set -euo pipefail
 
+TMP_DIR=""
+
+stop_gradle() {
+    echo
+    echo "Stopping Gradle daemons..."
+    (
+        cd android
+        ./gradlew --stop
+    ) || true
+}
+
+cleanup() {
+    stop_gradle
+
+    if [ -n "$TMP_DIR" ] && [ -d "$TMP_DIR" ]; then
+        rm -rf "$TMP_DIR"
+    fi
+}
+
+trap cleanup EXIT
+
 REMOTE_HOST="jan@docker-services"
 REMOTE_DIR="/opt/app-downloads/html/pirowflo"
 
@@ -36,6 +57,9 @@ flutter test
 
 echo
 echo "[3/6] Building release APK"
+
+stop_gradle
+
 flutter build apk \
   --flavor prod \
   --release \
@@ -76,7 +100,6 @@ echo
 echo "[6/6] Updating download page"
 
 TMP_DIR="$(mktemp -d)"
-trap 'rm -rf "$TMP_DIR"' EXIT
 
 cat > "$TMP_DIR/index.html" <<EOF
 <!doctype html>
