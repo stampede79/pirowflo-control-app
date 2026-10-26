@@ -5,6 +5,7 @@ import '../models/workout.dart';
 import '../widgets/section_title.dart';
 import '../widgets/system_status_card.dart';
 import '../widgets/water_header.dart';
+import '../models/today_workout_status.dart';
 
 class HomeScreen extends StatelessWidget {
   final bool running;
@@ -20,6 +21,8 @@ class HomeScreen extends StatelessWidget {
   final void Function(Workout) onStartWorkout;
   final ScheduledWorkout? nextWorkout;
   final void Function(ScheduledWorkout) onOpenWorkout;
+  final List<TodayWorkoutStatus> todayWorkoutStatuses;
+  final VoidCallback onStartFreeWorkout;
 
   const HomeScreen({
     super.key,
@@ -33,6 +36,8 @@ class HomeScreen extends StatelessWidget {
     required this.onStartWorkout,
     required this.nextWorkout,
     required this.onOpenWorkout,
+    required this.todayWorkoutStatuses,
+    required this.onStartFreeWorkout,
   });
 
   String _formatDate(DateTime date) {
@@ -43,6 +48,16 @@ class HomeScreen extends StatelessWidget {
     return '$weekday, '
         '${date.day.toString().padLeft(2, '0')}.'
         '${date.month.toString().padLeft(2, '0')}.';
+  }
+
+  TodayWorkoutStatus? _statusFor(Workout workout) {
+    for (final status in todayWorkoutStatuses) {
+      if (status.name == workout.name) {
+        return status;
+      }
+    }
+
+    return null;
   }
 
   @override
@@ -129,8 +144,12 @@ class HomeScreen extends StatelessWidget {
                   ),
                 )
               else
-                ...todaysWorkouts.map(
-                  (workout) => Padding(
+                ...todaysWorkouts.map((workout) {
+                  final status = _statusFor(workout);
+                  final completed = status?.completed ?? false;
+                  final activity = status?.activity;
+
+                  return Padding(
                     padding: const EdgeInsets.only(bottom: 12),
                     child: Card(
                       child: Padding(
@@ -194,21 +213,116 @@ class HomeScreen extends StatelessWidget {
 
                             const SizedBox(height: 20),
 
-                            SizedBox(
-                              width: double.infinity,
-                              child: FilledButton.icon(
-                                onPressed: () => onStartWorkout(workout),
-                                icon: const Icon(Icons.play_arrow),
-                                label: const Text('Training starten'),
+                            if (completed) ...[
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.check_circle,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .primary,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Training abgeschlossen',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium,
+                                  ),
+                                ],
                               ),
-                            ),
+
+                              if (activity != null) ...[
+                                const SizedBox(height: 12),
+
+                                Wrap(
+                                  spacing: 16,
+                                  runSpacing: 8,
+                                  children: [
+                                    if (activity.durationMinutes != null)
+                                      Text(
+                                        '${activity.durationMinutes!.toStringAsFixed(1)} Min.',
+                                      ),
+                                    if (activity.distanceKm != null)
+                                      Text(
+                                        '${activity.distanceKm!.toStringAsFixed(2)} km',
+                                      ),
+                                    if (activity.averagePower != null)
+                                      Text(
+                                        'Ø ${activity.averagePower!.round()} W',
+                                      ),
+                                    if (activity.averageHr != null)
+                                      Text(
+                                        'Ø HF ${activity.averageHr!.round()}',
+                                      ),
+                                  ],
+                                ),
+                              ],
+                            ] else
+                              SizedBox(
+                                width: double.infinity,
+                                child: FilledButton.icon(
+                                  onPressed: () => onStartWorkout(workout),
+                                  icon: const Icon(Icons.play_arrow),
+                                  label: const Text('Training starten'),
+                                ),
+                              ),
                           ],
                         ),
                       ),
                     ),
+                  );
+                }),
+              const SizedBox(height: 20),
+
+              Card(
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: onStartFreeWorkout,
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 46,
+                          height: 46,
+                          decoration: BoxDecoration(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .secondaryContainer,
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Icon(
+                            Icons.rowing,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Freies Training',
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Rudern ohne Trainingsvorgabe',
+                                style: Theme.of(context).textTheme.bodyMedium,
+                              ),
+                            ],
+                          ),
+                        ),
+                        Icon(
+                          Icons.chevron_right,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-
+              ),
               if (todaysWorkouts.isEmpty && nextWorkout != null) ...[
                 const SizedBox(height: 30),
 

@@ -31,6 +31,11 @@ import 'models/training_history_entry.dart';
 import 'services/training_history_merger.dart';
 import 'models/training_plan_draft.dart';
 import 'services/training_plan_service.dart';
+import 'models/training_plan_review.dart';
+import 'utils/pirowflo_plan_status.dart';
+import 'screens/coach_screen.dart';
+import 'models/coach_overview.dart';
+import 'models/today_workout_status.dart';
 
 void main() {
   runApp(const PiRowFloApp());
@@ -78,6 +83,9 @@ class _ControlPageState extends State<ControlPage> {
   bool endurainLoading = false;
   String? endurainStatus;
   EndurainSummary? rowingSummary;
+  CoachOverview? coachOverview;
+  bool coachOverviewLoading = false;
+  String? coachOverviewError;
   bool rowingStatisticsLoading = false;
   String? rowingStatisticsError;
   EndurainSummaryPeriod rowingStatisticsPeriod = EndurainSummaryPeriod.week;
@@ -92,6 +100,9 @@ class _ControlPageState extends State<ControlPage> {
   TrainingPlanDraft? trainingPlanDraft;
   bool trainingPlanDraftLoading = false;
   String? trainingPlanDraftError;
+  TrainingPlanReview? trainingPlanReview;
+  bool trainingPlanReviewLoading = false;
+  String? trainingPlanReviewError;
 
   String? calendarTestResult;
   int selectedPage = 0;
@@ -107,6 +118,8 @@ class _ControlPageState extends State<ControlPage> {
     'bluetooth': 'UNKNOWN',
     'ant': 'UNKNOWN',
   };
+
+  List<TodayWorkoutStatus> todayWorkoutStatuses = [];
 
   // SmartRow-Status
   bool smartRowAvailable = false;
@@ -137,6 +150,122 @@ class _ControlPageState extends State<ControlPage> {
   void initState() {
     super.initState();
     initializeApp();
+  }
+
+  Future<void> loadTodayWorkoutStatuses() async {
+    final server = serverController.text.trim();
+    final apiKey = apiKeyController.text.trim();
+
+    if (server.isEmpty || apiKey.isEmpty) {
+      if (!mounted) return;
+
+      setState(() {
+        todayWorkoutStatuses = [];
+      });
+
+      return;
+    }
+
+    try {
+      final response = await http
+          .get(
+            Uri.parse('$server/api/workouts/today'),
+            headers: {'X-API-Key': apiKey},
+          )
+          .timeout(const Duration(seconds: 15));
+
+      if (response.statusCode != 200) {
+        throw Exception('HTTP ${response.statusCode}');
+      }
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+
+      final rows = data['workouts'] as List<dynamic>? ?? const [];
+
+      final statuses = rows
+          .whereType<Map<String, dynamic>>()
+          .map(TodayWorkoutStatus.fromJson)
+          .toList();
+
+      if (!mounted) return;
+
+      setState(() {
+        todayWorkoutStatuses = statuses;
+      });
+    } catch (_) {
+      // Der zusätzliche Status darf die bisherige
+      // Home-Seite nicht unbrauchbar machen.
+      if (!mounted) return;
+
+      setState(() {
+        todayWorkoutStatuses = [];
+      });
+    }
+  }
+
+  Future<void> applyTrainingPlanReview() async {
+    final service = TrainingPlanService(
+      server: serverController.text.trim(),
+      apiKey: apiKeyController.text.trim(),
+    );
+
+    await service.applyReview();
+
+    await Future.wait([
+      loadTrainingPlanReview(),
+      loadTodaysWorkout(),
+      loadUpcomingWorkouts(),
+      loadRecentWorkouts(),
+      loadTodayWorkoutStatuses(),
+    ]);
+  }
+
+  Future<void> loadTrainingPlanReview() async {
+    final server = serverController.text.trim();
+    final apiKey = apiKeyController.text.trim();
+
+    if (!configured || server.isEmpty || apiKey.isEmpty) {
+      if (!mounted) return;
+
+      setState(() {
+        trainingPlanReview = null;
+        trainingPlanReviewError = null;
+        trainingPlanReviewLoading = false;
+      });
+
+      return;
+    }
+
+    setState(() {
+      trainingPlanReviewLoading = true;
+      trainingPlanReviewError = null;
+    });
+
+    try {
+      final service = TrainingPlanService(server: server, apiKey: apiKey);
+
+      final review = await service.getReview();
+
+      if (!mounted) return;
+
+      setState(() {
+        trainingPlanReview = review;
+        trainingPlanReviewError = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        trainingPlanReview = null;
+        trainingPlanReviewError = e.toString();
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          trainingPlanReviewLoading = false;
+        });
+      }
+    }
   }
 
   Future<void> loadMoreHistory() async {
@@ -307,6 +436,7 @@ class _ControlPageState extends State<ControlPage> {
       loadRecentActivitiesForMatching(),
       loadWorkoutHistory(),
       loadHistoryActivities(),
+      loadTodayWorkoutStatuses(),
     ]);
   }
 
@@ -343,7 +473,11 @@ class _ControlPageState extends State<ControlPage> {
       updatedDescription,
     );
 
-    await Future.wait([loadTodaysWorkout(), loadRecentWorkouts()]);
+    await Future.wait([
+      loadTodaysWorkout(),
+      loadRecentWorkouts(),
+      loadTodayWorkoutStatuses(),
+    ]);
 
     resolveRecentWorkoutMatches();
   }
@@ -391,12 +525,15 @@ class _ControlPageState extends State<ControlPage> {
         if (workout == null) {
           continue;
         }
+        final planStatus = parsePiRowFloPlanStatus(event.description);
 
         workouts.add(
           ScheduledWorkout(
             start: event.start.toLocal(),
             workout: workout,
             calendarEvent: event,
+            planStatus: planStatus.status,
+            planStatusReason: planStatus.reason,
           ),
         );
       }
@@ -457,12 +594,15 @@ class _ControlPageState extends State<ControlPage> {
         if (workout == null) {
           continue;
         }
+        final planStatus = parsePiRowFloPlanStatus(event.description);
 
         workouts.add(
           ScheduledWorkout(
             start: event.start.toLocal(),
             workout: workout,
             calendarEvent: event,
+            planStatus: planStatus.status,
+            planStatusReason: planStatus.reason,
           ),
         );
       }
@@ -534,6 +674,8 @@ class _ControlPageState extends State<ControlPage> {
     await loadWorkoutHistory();
     await loadHistoryActivities();
     await loadTrainingPlanDraft();
+    await loadTrainingPlanReview();
+    await loadTodayWorkoutStatuses();
   }
 
   Future<void> saveConfiguration() async {
@@ -584,6 +726,8 @@ class _ControlPageState extends State<ControlPage> {
     await loadWorkoutHistory();
     await loadHistoryActivities();
     await loadTrainingPlanDraft();
+    await loadTrainingPlanReview();
+    await loadTodayWorkoutStatuses();
   }
 
   Map<String, String> get headers => {
@@ -614,6 +758,65 @@ class _ControlPageState extends State<ControlPage> {
     setState(() {
       trainingHistory = history;
     });
+  }
+
+  Future<void> loadCoachOverview() async {
+    if (!configured) {
+      return;
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      coachOverviewLoading = true;
+      coachOverviewError = null;
+    });
+
+    try {
+      final response = await http
+          .get(
+            Uri.parse('${serverController.text}/api/coach/overview'),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 10));
+
+      if (response.statusCode != 200) {
+        throw Exception('HTTP ${response.statusCode}');
+      }
+
+      final data = jsonDecode(response.body);
+
+      if (data is! Map<String, dynamic>) {
+        throw const FormatException('Ungültige Coach-Antwort');
+      }
+
+      final overview = CoachOverview.fromJson(data);
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        coachOverview = overview;
+        coachOverviewError = null;
+      });
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        coachOverviewError = e.toString();
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          coachOverviewLoading = false;
+        });
+      }
+    }
   }
 
   Future<void> refreshStatus() async {
@@ -1033,6 +1236,32 @@ class _ControlPageState extends State<ControlPage> {
     await saveConfiguration();
   }
 
+  Future<void> decideCoachRecommendation(
+    int recommendationId,
+    String decision,
+  ) async {
+    final response = await http
+        .post(
+          Uri.parse(
+            '${serverController.text}'
+            '/api/coach/recommendations/'
+            '$recommendationId/decision',
+          ),
+          headers: {...headers, 'Content-Type': 'application/json'},
+          body: jsonEncode({'decision': decision}),
+        )
+        .timeout(const Duration(seconds: 20));
+
+    if (response.statusCode != 200) {
+      throw Exception(
+        'HTTP ${response.statusCode}: '
+        '${response.body}',
+      );
+    }
+
+    await loadCoachOverview();
+  }
+
   Future<void> testNextcloudCalendar() async {
     final calendarUrl = calendarUrlController.text.trim();
     final username = nextcloudUserController.text.trim();
@@ -1168,7 +1397,12 @@ class _ControlPageState extends State<ControlPage> {
       // Das heutige Training wird separat über todaysWorkout behandelt.
       final start = DateTime(now.year, now.month, now.day + 1);
 
-      final end = start.add(const Duration(days: 14));
+      // Bis zum Ende des Folgemonats laden.
+      final end = now.month == 12
+          ? DateTime(now.year + 1, 2, 1)
+          : now.month == 11
+          ? DateTime(now.year + 1, 1, 1)
+          : DateTime(now.year, now.month + 2, 1);
 
       final events = await service.getEventsForRange(start, end);
 
@@ -1198,11 +1432,15 @@ class _ControlPageState extends State<ControlPage> {
           continue;
         }
 
+        final planStatus = parsePiRowFloPlanStatus(event.description);
+
         workouts.add(
           ScheduledWorkout(
             start: eventDate,
             workout: workout,
             calendarEvent: event,
+            planStatus: planStatus.status,
+            planStatusReason: planStatus.reason,
           ),
         );
       }
@@ -1221,6 +1459,10 @@ class _ControlPageState extends State<ControlPage> {
         upcomingWorkouts = [];
       });
     }
+  }
+
+  Future<void> startFreeWorkout() async {
+    await startWorkout(Workout.free());
   }
 
   Future<void> startWorkout(Workout workout) async {
@@ -1289,10 +1531,35 @@ class _ControlPageState extends State<ControlPage> {
 
     await Future.wait([
       loadTrainingPlanDraft(),
+      loadTrainingPlanReview(),
       loadTodaysWorkout(),
       loadUpcomingWorkouts(),
       loadWorkoutHistory(),
+      loadTodayWorkoutStatuses(),
     ]);
+  }
+
+  Future<void> answerAvailability(int recommendationId, String status) async {
+    final response = await http
+        .post(
+          Uri.parse(
+            '${serverController.text}'
+            '/api/coach/recommendations/'
+            '$recommendationId/availability',
+          ),
+          headers: {...headers, 'Content-Type': 'application/json'},
+          body: jsonEncode({'status': status}),
+        )
+        .timeout(const Duration(seconds: 10));
+
+    if (response.statusCode != 200) {
+      throw Exception(
+        'HTTP ${response.statusCode}: '
+        '${response.body}',
+      );
+    }
+
+    await loadCoachOverview();
   }
 
   void showSettings() {
@@ -1540,17 +1807,21 @@ class _ControlPageState extends State<ControlPage> {
         title: Text(switch (selectedPage) {
           0 => 'PiRowFlo Control',
           1 => 'Training',
-          2 => 'Statistiken',
-          3 => 'PiRowFlo-Steuerung',
+          2 => 'Coach',
+          3 => 'Statistiken',
+          4 => 'PiRowFlo-Steuerung',
           _ => 'PiRowFlo Control',
         }),
         actions: [
           IconButton(
-            onPressed: loading || rowingStatisticsLoading
+            onPressed:
+                loading || rowingStatisticsLoading || coachOverviewLoading
                 ? null
-                : selectedPage == 2
-                ? loadRowingStatistics
-                : refreshAll,
+                : switch (selectedPage) {
+                    2 => loadCoachOverview,
+                    3 => loadRowingStatistics,
+                    _ => refreshAll,
+                  },
             icon: const Icon(Icons.refresh),
             tooltip: 'Aktualisieren',
           ),
@@ -1566,6 +1837,10 @@ class _ControlPageState extends State<ControlPage> {
           });
 
           if (page == 2) {
+            loadCoachOverview();
+          }
+
+          if (page == 3) {
             loadRowingStatistics();
           }
         },
@@ -1583,8 +1858,10 @@ class _ControlPageState extends State<ControlPage> {
           calendarLoading: calendarLoading,
           calendarError: calendarError,
           todaysWorkouts: todaysWorkouts,
+          todayWorkoutStatuses: todayWorkoutStatuses,
           nextWorkout: nextWorkout,
           onStartWorkout: startWorkout,
+          onStartFreeWorkout: startFreeWorkout,
           onOpenWorkout: openWorkoutDetail,
         ),
 
@@ -1612,9 +1889,21 @@ class _ControlPageState extends State<ControlPage> {
           },
           trainingPlanDraft: trainingPlanDraft,
           trainingPlanDraftLoading: trainingPlanDraftLoading,
+          trainingPlanReview: trainingPlanReview,
+          trainingPlanReviewLoading: trainingPlanReviewLoading,
+          onApplyTrainingPlanReview: applyTrainingPlanReview,
         ),
 
-        2 => RowingStatisticsScreen(
+        2 => CoachScreen(
+          overview: coachOverview,
+          loading: coachOverviewLoading,
+          error: coachOverviewError,
+          onRefresh: loadCoachOverview,
+          onAnswerAvailability: answerAvailability,
+          onDecideRecommendation: decideCoachRecommendation,
+        ),
+
+        3 => RowingStatisticsScreen(
           summary: rowingSummary,
           loading: rowingStatisticsLoading,
           error: rowingStatisticsError,
@@ -1622,7 +1911,7 @@ class _ControlPageState extends State<ControlPage> {
           onPeriodChanged: changeRowingStatisticsPeriod,
           onRefresh: loadRowingStatistics,
         ),
-        3 => SafeArea(
+        4 => SafeArea(
           // HIER bleibt dein bisheriger
           // PiRowFlo-Steuerungs-Body,
           child: Padding(

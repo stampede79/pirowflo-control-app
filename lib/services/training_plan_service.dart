@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../models/training_plan_draft.dart';
+import '../models/training_plan_review.dart';
 
 class TrainingPlanService {
   final String server;
@@ -12,6 +13,41 @@ class TrainingPlanService {
 
   String get _server =>
       server.endsWith('/') ? server.substring(0, server.length - 1) : server;
+
+  Future<TrainingPlanReview?> getReview() async {
+    final response = await http
+        .get(
+          Uri.parse('$_server/api/training-plan/review'),
+          headers: {'X-API-Key': apiKey},
+        )
+        .timeout(const Duration(seconds: 10));
+
+    if (response.statusCode != 200) {
+      throw Exception(
+        'Trainingsplan-Review konnte nicht '
+        'geladen werden '
+        '(HTTP ${response.statusCode})',
+      );
+    }
+
+    final json = jsonDecode(response.body);
+
+    if (json is! Map<String, dynamic>) {
+      throw const FormatException('Ungültige Trainingsplan-Review-Antwort');
+    }
+
+    if (json['available'] != true) {
+      return null;
+    }
+
+    final review = json['review'];
+
+    if (review is! Map<String, dynamic>) {
+      throw const FormatException('Ungültiger Trainingsplan-Review');
+    }
+
+    return TrainingPlanReview.fromJson(review);
+  }
 
   Future<TrainingPlanDraft?> getDraft() async {
     final response = await http
@@ -45,6 +81,36 @@ class TrainingPlanService {
     }
 
     return TrainingPlanDraft.fromJson(draft);
+  }
+
+  Future<void> applyReview() async {
+    final response = await http
+        .post(
+          Uri.parse('$_server/api/training-plan/review/apply'),
+          headers: {'X-API-Key': apiKey},
+        )
+        .timeout(const Duration(seconds: 30));
+
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      return;
+    }
+
+    String detail = response.body;
+
+    try {
+      final json = jsonDecode(response.body);
+
+      if (json is Map<String, dynamic> && json['detail'] != null) {
+        detail = json['detail'].toString();
+      }
+    } catch (_) {
+      // Kein JSON.
+    }
+
+    throw Exception(
+      'Plananpassung konnte nicht übernommen werden '
+      '(HTTP ${response.statusCode}): $detail',
+    );
   }
 
   Future<void> applyDraft() async {

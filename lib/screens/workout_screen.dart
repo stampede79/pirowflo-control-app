@@ -161,6 +161,25 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     timer = Timer.periodic(const Duration(seconds: 1), (_) => tick());
   }
 
+  void finishFreeWorkout() {
+    if (!widget.workout.isFree || finished || !workoutStarted) {
+      return;
+    }
+
+    timer?.cancel();
+
+    final completedDuration = remaining;
+
+    stepResults.add(stepRecorder.finish(completedDuration));
+
+    playFinishedSignal();
+
+    setState(() {
+      running = false;
+      finished = true;
+    });
+  }
+
   void startWorkoutCountdown() {
     startCountdownTimer?.cancel();
 
@@ -215,6 +234,13 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
   void tick() {
     if (!mounted || !running) return;
+    if (widget.workout.isFree) {
+      setState(() {
+        remaining += const Duration(seconds: 1);
+      });
+
+      return;
+    }
 
     if (remaining.inSeconds > 1) {
       setState(() {
@@ -851,12 +877,19 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
                         const SizedBox(height: 8),
 
-                        Text(
-                          'Abschnitt ${currentStepIndex + 1} von '
-                          '${widget.workout.steps.length}',
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
+                        if (!widget.workout.isFree)
+                          Text(
+                            'Abschnitt ${currentStepIndex + 1} von '
+                            '${widget.workout.steps.length}',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          )
+                        else
+                          Text(
+                            'Ohne Trainingsvorgabe',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
 
                         const SizedBox(height: 28),
 
@@ -901,7 +934,9 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                         ),
 
                         Text(
-                          'verbleibend',
+                          widget.workout.isFree
+                              ? 'Trainingszeit'
+                              : 'verbleibend',
                           textAlign: TextAlign.center,
                           style: Theme.of(context).textTheme.bodyMedium,
                         ),
@@ -1056,11 +1091,22 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
                         const SizedBox(height: 10),
 
-                        OutlinedButton.icon(
-                          onPressed: startingWorkout ? null : () => nextStep(),
-                          icon: const Icon(Icons.skip_next),
-                          label: const Text('Abschnitt überspringen'),
-                        ),
+                        if (widget.workout.isFree)
+                          OutlinedButton.icon(
+                            onPressed: startingWorkout || !workoutStarted
+                                ? null
+                                : finishFreeWorkout,
+                            icon: const Icon(Icons.stop_circle_outlined),
+                            label: const Text('Training beenden'),
+                          )
+                        else
+                          OutlinedButton.icon(
+                            onPressed: startingWorkout
+                                ? null
+                                : () => nextStep(),
+                            icon: const Icon(Icons.skip_next),
+                            label: const Text('Abschnitt überspringen'),
+                          ),
                       ],
                     ),
                   ),

@@ -32,12 +32,29 @@ class Workout {
   final String name;
   final String description;
   final List<WorkoutStep> steps;
+  final bool isFree;
 
   const Workout({
     required this.name,
     required this.description,
     required this.steps,
+    this.isFree = false,
   });
+
+  factory Workout.free() {
+    return const Workout(
+      name: 'Freies Training',
+      description: 'Freies Rudern ohne Trainingsvorgabe.',
+      steps: [
+        WorkoutStep(
+          type: WorkoutStepType.work,
+          title: 'Freies Training',
+          duration: Duration.zero,
+        ),
+      ],
+      isFree: true,
+    );
+  }
 
   Duration get totalDuration =>
       steps.fold(Duration.zero, (total, step) => total + step.duration);

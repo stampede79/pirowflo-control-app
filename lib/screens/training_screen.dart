@@ -4,7 +4,6 @@ import '../models/scheduled_workout.dart';
 import '../models/workout.dart';
 import '../widgets/section_title.dart';
 import '../widgets/water_header.dart';
-import '../widgets/workout_timeline.dart';
 import '../models/recent_workout_match.dart';
 import '../models/endurain_activity.dart';
 import '../utils/user_friendly_error.dart';
@@ -12,8 +11,13 @@ import 'rowing_activity_detail_screen.dart';
 import '../models/training_history_entry.dart';
 import '../models/training_plan_draft.dart';
 import 'training_plan_draft_screen.dart';
+import '../models/training_plan_review.dart';
+import 'training_plan_review_screen.dart';
+import '../utils/workout_display.dart';
 
-class TrainingScreen extends StatelessWidget {
+enum TrainingView { overview, plan, history }
+
+class TrainingScreen extends StatefulWidget {
   final List<Workout> todaysWorkouts;
   final List<ScheduledWorkout> upcomingWorkouts;
   final bool calendarLoading;
@@ -29,6 +33,9 @@ class TrainingScreen extends StatelessWidget {
   final TrainingPlanDraft? trainingPlanDraft;
   final bool trainingPlanDraftLoading;
   final Future<void> Function() onApplyTrainingPlan;
+  final TrainingPlanReview? trainingPlanReview;
+  final bool trainingPlanReviewLoading;
+  final Future<void> Function() onApplyTrainingPlanReview;
 
   const TrainingScreen({
     super.key,
@@ -47,6 +54,92 @@ class TrainingScreen extends StatelessWidget {
     required this.trainingPlanDraft,
     required this.trainingPlanDraftLoading,
     required this.onApplyTrainingPlan,
+    required this.trainingPlanReview,
+    required this.trainingPlanReviewLoading,
+    required this.onApplyTrainingPlanReview,
+  });
+
+  @override
+  State<TrainingScreen> createState() => _TrainingScreenState();
+}
+
+class _TrainingScreenState extends State<TrainingScreen> {
+  TrainingView view = TrainingView.overview;
+
+  @override
+  Widget build(BuildContext context) {
+    return _TrainingContent(
+      todaysWorkouts: widget.todaysWorkouts,
+      upcomingWorkouts: widget.upcomingWorkouts,
+      calendarLoading: widget.calendarLoading,
+      calendarError: widget.calendarError,
+      onStartWorkout: widget.onStartWorkout,
+      onOpenWorkout: widget.onOpenWorkout,
+      trainingHistory: widget.trainingHistory,
+      onLinkWorkout: widget.onLinkWorkout,
+      endurainServer: widget.endurainServer,
+      historyLoadingMore: widget.historyLoadingMore,
+      onLoadMoreHistory: widget.onLoadMoreHistory,
+      historyHasMore: widget.historyHasMore,
+      trainingPlanDraft: widget.trainingPlanDraft,
+      trainingPlanDraftLoading: widget.trainingPlanDraftLoading,
+      onApplyTrainingPlan: widget.onApplyTrainingPlan,
+      view: view,
+      trainingPlanReview: widget.trainingPlanReview,
+      trainingPlanReviewLoading: widget.trainingPlanReviewLoading,
+      onViewChanged: (newView) {
+        setState(() {
+          view = newView;
+        });
+      },
+      onApplyTrainingPlanReview: widget.onApplyTrainingPlanReview,
+    );
+  }
+}
+
+class _TrainingContent extends StatelessWidget {
+  final List<Workout> todaysWorkouts;
+  final List<ScheduledWorkout> upcomingWorkouts;
+  final bool calendarLoading;
+  final String? calendarError;
+  final void Function(Workout) onStartWorkout;
+  final void Function(ScheduledWorkout) onOpenWorkout;
+  final List<TrainingHistoryEntry> trainingHistory;
+  final Future<void> Function(RecentWorkoutMatch) onLinkWorkout;
+  final String endurainServer;
+  final bool historyLoadingMore;
+  final Future<void> Function() onLoadMoreHistory;
+  final bool historyHasMore;
+  final TrainingPlanDraft? trainingPlanDraft;
+  final bool trainingPlanDraftLoading;
+  final Future<void> Function() onApplyTrainingPlan;
+  final TrainingView view;
+  final ValueChanged<TrainingView> onViewChanged;
+  final TrainingPlanReview? trainingPlanReview;
+  final bool trainingPlanReviewLoading;
+  final Future<void> Function() onApplyTrainingPlanReview;
+
+  const _TrainingContent({
+    required this.todaysWorkouts,
+    required this.upcomingWorkouts,
+    required this.calendarLoading,
+    required this.calendarError,
+    required this.onStartWorkout,
+    required this.onOpenWorkout,
+    required this.trainingHistory,
+    required this.onLinkWorkout,
+    required this.endurainServer,
+    required this.historyLoadingMore,
+    required this.onLoadMoreHistory,
+    required this.historyHasMore,
+    required this.trainingPlanDraft,
+    required this.trainingPlanDraftLoading,
+    required this.onApplyTrainingPlan,
+    required this.view,
+    required this.onViewChanged,
+    required this.trainingPlanReview,
+    required this.trainingPlanReviewLoading,
+    required this.onApplyTrainingPlanReview,
   });
 
   String _formatHistoryDate(DateTime date) {
@@ -64,115 +157,188 @@ class TrainingScreen extends StatelessWidget {
         '${date.month.toString().padLeft(2, '0')}.';
   }
 
+  String _formatMonth(DateTime date) {
+    const months = [
+      '',
+      'Januar',
+      'Februar',
+      'März',
+      'April',
+      'Mai',
+      'Juni',
+      'Juli',
+      'August',
+      'September',
+      'Oktober',
+      'November',
+      'Dezember',
+    ];
+
+    return '${months[date.month]} ${date.year}';
+  }
+
   @override
   Widget build(BuildContext context) {
+    final workoutsByMonth = <DateTime, List<ScheduledWorkout>>{};
+
+    for (final scheduled in upcomingWorkouts) {
+      final month = DateTime(scheduled.start.year, scheduled.start.month);
+
+      workoutsByMonth.putIfAbsent(month, () => []).add(scheduled);
+    }
     return ListView(
       padding: EdgeInsets.zero,
       children: [
         const WaterHeader(height: 210),
 
         Padding(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
+          child: SizedBox(
+            width: double.infinity,
+            child: SegmentedButton<TrainingView>(
+              segments: const [
+                ButtonSegment(
+                  value: TrainingView.overview,
+                  icon: Icon(Icons.home_outlined),
+                  label: Text('Aktuell'),
+                ),
+                ButtonSegment(
+                  value: TrainingView.plan,
+                  icon: Icon(Icons.calendar_month_outlined),
+                  label: Text('Plan'),
+                ),
+                ButtonSegment(
+                  value: TrainingView.history,
+                  icon: Icon(Icons.history),
+                  label: Text('Historie'),
+                ),
+              ],
+              selected: {view},
+              showSelectedIcon: false,
+              onSelectionChanged: (selection) {
+                onViewChanged(selection.first);
+              },
+            ),
+          ),
+        ),
+
+        const SizedBox(height: 6),
+
+        Padding(
           padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const SectionTitle('Heute', icon: Icons.today_outlined),
-              const SizedBox(height: 12),
+              if (view == TrainingView.overview) ...[
+                const SectionTitle('Heute', icon: Icons.today_outlined),
+                const SizedBox(height: 12),
 
-              if (calendarLoading)
-                const Card(
-                  child: Padding(
-                    padding: EdgeInsets.all(20),
-                    child: Row(
-                      children: [
-                        SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                        SizedBox(width: 16),
-                        Text('Trainingsplan wird geladen …'),
-                      ],
-                    ),
-                  ),
-                )
-              else if (calendarError != null)
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Text(
-                      calendarError!,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
+                if (calendarLoading)
+                  const Card(
+                    child: Padding(
+                      padding: EdgeInsets.all(20),
+                      child: Row(
+                        children: [
+                          SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                          SizedBox(width: 16),
+                          Text('Trainingsplan wird geladen …'),
+                        ],
                       ),
                     ),
-                  ),
-                )
-              else if (todaysWorkouts.isEmpty)
-                const Card(
-                  child: Padding(
-                    padding: EdgeInsets.all(20),
-                    child: Text('Heute ist kein Training geplant.'),
-                  ),
-                )
-              else
-                ...todaysWorkouts.map(
-                  (workout) => Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(20),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              workout.name,
-                              style: Theme.of(context).textTheme.headlineSmall,
-                            ),
-
-                            const SizedBox(height: 4),
-
-                            Text(
-                              '${workout.totalDuration.inMinutes} Minuten',
-                              style: Theme.of(context).textTheme.bodyMedium,
-                            ),
-
-                            if (workout.description.isNotEmpty) ...[
-                              const SizedBox(height: 12),
+                  )
+                else if (calendarError != null)
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Text(
+                        calendarError!,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                    ),
+                  )
+                else if (todaysWorkouts.isEmpty)
+                  const Card(
+                    child: Padding(
+                      padding: EdgeInsets.all(20),
+                      child: Text('Heute ist kein Training geplant.'),
+                    ),
+                  )
+                else
+                  ...todaysWorkouts.map(
+                    (workout) => Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(20),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
                               Text(
-                                workout.description,
-                                style: Theme.of(context).textTheme.bodyLarge,
+                                workout.name,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .headlineSmall,
+                              ),
+
+                              const SizedBox(height: 6),
+
+                              Text(
+                                '${workout.totalDuration.inMinutes} Minuten',
+                                style: Theme.of(context).textTheme.bodyMedium,
+                              ),
+
+                              if (workout.description.isNotEmpty) ...[
+                                const SizedBox(height: 8),
+
+                                Text(
+                                  workout.description,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: Theme.of(context).textTheme.bodyMedium,
+                                ),
+                              ],
+
+                              const SizedBox(height: 18),
+
+                              SizedBox(
+                                width: double.infinity,
+                                child: FilledButton.icon(
+                                  onPressed: () => onStartWorkout(workout),
+                                  icon: const Icon(Icons.play_arrow),
+                                  label: const Text('Training starten'),
+                                ),
                               ),
                             ],
-
-                            const SizedBox(height: 22),
-
-                            Text(
-                              'Ablauf',
-                              style: Theme.of(context).textTheme.titleLarge,
-                            ),
-
-                            const SizedBox(height: 18),
-
-                            WorkoutTimeline(workout: workout),
-
-                            const SizedBox(height: 6),
-
-                            SizedBox(
-                              width: double.infinity,
-                              child: FilledButton.icon(
-                                onPressed: () => onStartWorkout(workout),
-                                icon: const Icon(Icons.play_arrow),
-                                label: const Text('Training starten'),
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
                       ),
                     ),
                   ),
+              ],
+              if (view == TrainingView.overview &&
+                  trainingPlanReview != null) ...[
+                const SizedBox(height: 32),
+
+                const SectionTitle(
+                  'Trainingscoach',
+                  icon: Icons.auto_awesome_outlined,
                 ),
-              if (trainingPlanDraft != null) ...[
+
+                const SizedBox(height: 12),
+
+                _TrainingPlanReviewTile(
+                  review: trainingPlanReview!,
+                  onApply: onApplyTrainingPlanReview,
+                ),
+              ],
+              if (view == TrainingView.overview &&
+                  trainingPlanDraft != null) ...[
                 const SizedBox(height: 32),
 
                 const SectionTitle(
@@ -187,7 +353,8 @@ class TrainingScreen extends StatelessWidget {
                   onApply: onApplyTrainingPlan,
                 ),
               ],
-              if (trainingHistory.isNotEmpty) ...[
+              if (view == TrainingView.history &&
+                  trainingHistory.isNotEmpty) ...[
                 const SizedBox(height: 32),
 
                 const SectionTitle('Trainingshistorie', icon: Icons.history),
@@ -253,43 +420,142 @@ class TrainingScreen extends StatelessWidget {
                 ],
               ],
 
-              const SizedBox(height: 32),
+              if (view == TrainingView.plan) ...[
+                const SizedBox(height: 32),
 
-              const SectionTitle(
-                'Trainingsplan',
-                icon: Icons.calendar_month_outlined,
-              ),
-
-              const SizedBox(height: 12),
-
-              if (upcomingWorkouts.isEmpty)
-                const Card(
-                  child: Padding(
-                    padding: EdgeInsets.all(20),
-                    child: Text('Keine weiteren Trainings geplant.'),
-                  ),
-                )
-              else
-                Card(
-                  clipBehavior: Clip.antiAlias,
-                  child: Column(
-                    children: [
-                      for (var i = 0; i < upcomingWorkouts.length; i++) ...[
-                        _UpcomingWorkoutTile(
-                          scheduled: upcomingWorkouts[i],
-                          formattedDate: _formatDate(upcomingWorkouts[i].start),
-                          onTap: () => onOpenWorkout(upcomingWorkouts[i]),
-                        ),
-                        if (i < upcomingWorkouts.length - 1)
-                          const Divider(height: 1, indent: 18, endIndent: 18),
-                      ],
-                    ],
-                  ),
+                const SectionTitle(
+                  'Trainingsplan',
+                  icon: Icons.calendar_month_outlined,
                 ),
+
+                const SizedBox(height: 12),
+
+                if (upcomingWorkouts.isEmpty)
+                  const Card(
+                    child: Padding(
+                      padding: EdgeInsets.all(20),
+                      child: Text('Keine weiteren Trainings geplant.'),
+                    ),
+                  )
+                else
+                  for (final entry in workoutsByMonth.entries) ...[
+                    Text(
+                      _formatMonth(entry.key),
+                      style: Theme.of(context).textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w600),
+                    ),
+
+                    const SizedBox(height: 8),
+
+                    Card(
+                      clipBehavior: Clip.antiAlias,
+                      child: Column(
+                        children: [
+                          for (var i = 0; i < entry.value.length; i++) ...[
+                            _UpcomingWorkoutTile(
+                              scheduled: entry.value[i],
+                              formattedDate: _formatDate(entry.value[i].start),
+                              onTap: () => onOpenWorkout(entry.value[i]),
+                            ),
+
+                            if (i < entry.value.length - 1)
+                              const Divider(
+                                height: 1,
+                                indent: 18,
+                                endIndent: 18,
+                              ),
+                          ],
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 20),
+                  ],
+              ],
             ],
           ),
         ),
       ],
+    );
+  }
+}
+
+class _TrainingPlanReviewTile extends StatelessWidget {
+  final TrainingPlanReview review;
+  final Future<void> Function() onApply;
+
+  const _TrainingPlanReviewTile({required this.review, required this.onApply});
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return Material(
+      color: colors.tertiaryContainer,
+      borderRadius: BorderRadius.circular(14),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        // Vorschau kommt als nächster Schritt.
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) =>
+                  TrainingPlanReviewScreen(review: review, onApply: onApply),
+            ),
+          );
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          child: Row(
+            children: [
+              Icon(
+                Icons.auto_awesome,
+                color: colors.onTertiaryContainer,
+                size: 26,
+              ),
+
+              const SizedBox(width: 12),
+
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Plananpassung empfohlen',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: colors.onTertiaryContainer,
+                      ),
+                    ),
+
+                    const SizedBox(height: 4),
+
+                    Text(
+                      '${review.changes.length} '
+                      '${review.changes.length == 1 ? 'Training' : 'Trainings'} '
+                      'betroffen',
+                      style: Theme.of(context).textTheme.bodyMedium
+                          ?.copyWith(color: colors.onTertiaryContainer),
+                    ),
+
+                    const SizedBox(height: 4),
+
+                    Text(
+                      review.summary,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall
+                          ?.copyWith(color: colors.onTertiaryContainer),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+
+              Icon(Icons.chevron_right, color: colors.onTertiaryContainer),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -430,7 +696,7 @@ class _TrainingHistoryTile extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              scheduled.workout.name,
+              workoutDisplayName(scheduled.workout.name),
               style: Theme.of(context).textTheme.titleMedium,
             ),
 
@@ -704,9 +970,12 @@ class _UpcomingWorkoutTile extends StatelessWidget {
   });
 
   @override
+  @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final skipped = scheduled.isSkipped;
     return InkWell(
-      onTap: onTap,
+      onTap: skipped ? null : onTap,
       child: Padding(
         padding: const EdgeInsets.all(18),
         child: Row(
@@ -715,36 +984,66 @@ class _UpcomingWorkoutTile extends StatelessWidget {
               width: 48,
               height: 48,
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primaryContainer,
+                color: skipped
+                    ? colors.surfaceContainerHighest
+                    : colors.primaryContainer,
                 borderRadius: BorderRadius.circular(14),
               ),
               child: Icon(
-                Icons.rowing,
-                color: Theme.of(context).colorScheme.primary,
+                skipped ? Icons.skip_next_outlined : Icons.rowing,
+                color: skipped ? colors.onSurfaceVariant : colors.primary,
               ),
             ),
+
             const SizedBox(width: 14),
+
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    scheduled.workout.name,
-                    style: Theme.of(context).textTheme.titleMedium,
+                    workoutDisplayName(scheduled.workout.name),
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: skipped ? colors.onSurfaceVariant : null,
+                    ),
                   ),
+
                   const SizedBox(height: 4),
+
                   Text(
                     '$formattedDate · '
                     '${scheduled.workout.totalDuration.inMinutes} Min.',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
+
+                  if (skipped) ...[
+                    const SizedBox(height: 5),
+
+                    Text(
+                      'Ausgesetzt',
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: colors.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+
+                    if (scheduled.planStatusReason != null) ...[
+                      const SizedBox(height: 2),
+
+                      Text(
+                        scheduled.planStatusReason!,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall
+                            ?.copyWith(color: colors.onSurfaceVariant),
+                      ),
+                    ],
+                  ],
                 ],
               ),
             ),
-            Icon(
-              Icons.chevron_right,
-              color: Theme.of(context).colorScheme.primary,
-            ),
+
+            if (!skipped) Icon(Icons.chevron_right, color: colors.primary),
           ],
         ),
       ),
