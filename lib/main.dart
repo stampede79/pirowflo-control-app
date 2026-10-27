@@ -456,8 +456,9 @@ class _ControlPageState extends State<ControlPage> {
       });
 
       resolveTrainingHistory();
-    } catch (_) {
-      // Historie darf die normale App nicht blockieren.
+    } catch (e, stackTrace) {
+      debugPrint('loadWorkoutHistory failed: $e');
+      debugPrintStack(stackTrace: stackTrace);
     }
   }
 

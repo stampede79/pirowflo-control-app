@@ -5,6 +5,8 @@ import 'package:http/http.dart' as http;
 import '../models/api_workout.dart';
 import '../models/scheduled_workout.dart';
 
+import 'package:flutter/foundation.dart';
+
 class WorkoutService {
   final String server;
   final String apiKey;
@@ -19,10 +21,25 @@ class WorkoutService {
   }) async {
     final apiWorkouts = await getWorkouts(start: start, end: end);
 
-    return apiWorkouts
-        .map((apiWorkout) => apiWorkout.toScheduledWorkout())
-        .whereType<ScheduledWorkout>()
-        .toList();
+    final workouts = <ScheduledWorkout>[];
+
+    for (final apiWorkout in apiWorkouts) {
+      try {
+        final scheduledWorkout = apiWorkout.toScheduledWorkout();
+
+        if (scheduledWorkout != null) {
+          workouts.add(scheduledWorkout);
+        }
+      } catch (e, stackTrace) {
+        debugPrint(
+          'Failed to parse workout '
+          '${apiWorkout.id} (${apiWorkout.scheduledDate}): $e',
+        );
+        debugPrintStack(stackTrace: stackTrace);
+      }
+    }
+
+    return workouts;
   }
 
   Future<List<ApiWorkout>> getWorkouts({

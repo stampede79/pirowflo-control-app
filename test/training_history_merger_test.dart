@@ -13,6 +13,7 @@ void main() {
     DateTime? start,
     Duration duration = const Duration(minutes: 40),
     int? linkedActivityId,
+    String? status,
   }) {
     final workoutStart = start ?? DateTime(2026, 10, 24);
 
@@ -20,7 +21,7 @@ void main() {
       id: 1,
       start: workoutStart,
       allDay: true,
-      status: linkedActivityId != null ? 'completed' : 'planned',
+      status: status ?? (linkedActivityId != null ? 'completed' : 'planned'),
       activity: linkedActivityId != null
           ? ApiWorkoutActivity(
               id: linkedActivityId,
@@ -174,6 +175,55 @@ void main() {
       expect(result.first.match?.status, RecentWorkoutMatchStatus.candidate);
 
       expect(result.first.match?.candidate?.activity.id, 1053);
+    });
+
+    test('zeigt missed Training als geplanten Historieneintrag', () {
+      final missedWorkout = workout(
+        start: DateTime(2026, 10, 16),
+        status: 'missed',
+      );
+
+      final result = TrainingHistoryMerger.merge([missedWorkout], []);
+
+      expect(result, hasLength(1));
+      expect(result.first.type, TrainingHistoryEntryType.planned);
+      expect(result.first.match?.status, RecentWorkoutMatchStatus.missed);
+      expect(result.first.activity, isNull);
+    });
+
+    test('missed Training beansprucht keine freie Aktivität', () {
+      final missedWorkout = workout(
+        start: DateTime(2026, 10, 16),
+        status: 'missed',
+      );
+
+      final freeActivity = activity(
+        id: 1085,
+        start: DateTime(2026, 10, 16, 18),
+      );
+
+      final result = TrainingHistoryMerger.merge(
+        [missedWorkout],
+        [freeActivity],
+      );
+
+      expect(result, hasLength(2));
+
+      expect(
+        result.any(
+          (entry) => entry.match?.status == RecentWorkoutMatchStatus.missed,
+        ),
+        isTrue,
+      );
+
+      expect(
+        result.any(
+          (entry) =>
+              entry.type == TrainingHistoryEntryType.free &&
+              entry.activity?.id == 1085,
+        ),
+        isTrue,
+      );
     });
   });
 }

@@ -44,15 +44,17 @@ class RecentWorkoutMatcher {
           (workout) =>
               !resolved.containsKey(workout) &&
               !workout.isSkipped &&
+              !workout.isMissed &&
               !workout.isCompleted,
         )
         .toList();
+
     for (final workout in workouts) {
       if (resolved.containsKey(workout)) {
         continue;
       }
 
-      if (workout.isSkipped) {
+      if (workout.isSkipped || workout.isMissed) {
         resolved[workout] = RecentWorkoutMatch(scheduledWorkout: workout);
       }
     }

@@ -12,6 +12,7 @@ void main() {
     DateTime? start,
     Duration duration = const Duration(minutes: 40),
     int? linkedActivityId,
+    String? status,
   }) {
     final workoutStart = start ?? DateTime(2026, 10, 24);
 
@@ -19,7 +20,7 @@ void main() {
       id: 1,
       start: workoutStart,
       allDay: true,
-      status: linkedActivityId != null ? 'completed' : 'planned',
+      status: status ?? (linkedActivityId != null ? 'completed' : 'planned'),
       activity: linkedActivityId != null
           ? ApiWorkoutActivity(
               id: linkedActivityId,
@@ -190,6 +191,45 @@ void main() {
 
       expect(result.first.linkedActivity, isNull);
 
+      expect(result.first.candidate, isNull);
+    });
+
+    test('behandelt verpasstes Training als missed', () {
+      final scheduled = workout(status: 'missed');
+
+      final result = RecentWorkoutMatcher.resolve([scheduled], []);
+
+      expect(result, hasLength(1));
+      expect(result.first.status, RecentWorkoutMatchStatus.missed);
+      expect(result.first.candidate, isNull);
+      expect(result.first.linkedActivity, isNull);
+    });
+
+    test('ordnet missed Training keine Aktivität mehr zu', () {
+      final scheduled = workout(status: 'missed');
+
+      final candidateActivity = activity(
+        id: 1053,
+        start: DateTime(2026, 10, 24, 18),
+      );
+
+      final result = RecentWorkoutMatcher.resolve(
+        [scheduled],
+        [candidateActivity],
+      );
+
+      expect(result, hasLength(1));
+      expect(result.first.status, RecentWorkoutMatchStatus.missed);
+      expect(result.first.candidate, isNull);
+    });
+
+    test('behandelt bewusst ausgesetztes Training als skipped', () {
+      final scheduled = workout(status: 'skipped');
+
+      final result = RecentWorkoutMatcher.resolve([scheduled], []);
+
+      expect(result, hasLength(1));
+      expect(result.first.status, RecentWorkoutMatchStatus.skipped);
       expect(result.first.candidate, isNull);
     });
   });

@@ -82,6 +82,7 @@ class ApiWorkout {
   bool get completed => status == 'completed';
   bool get planned => status == 'planned';
   bool get skipped => status == 'skipped';
+  bool get missed => status == 'missed';
 
   Workout? toWorkout() {
     final lines = <String>['[PIROWFLO]'];

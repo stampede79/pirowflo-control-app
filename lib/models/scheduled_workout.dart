@@ -28,4 +28,6 @@ class ScheduledWorkout {
   bool get isSkipped => status == 'skipped';
 
   bool get isCompleted => status == 'completed';
+
+  bool get isMissed => status == 'missed';
 }

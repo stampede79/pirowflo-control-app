@@ -872,6 +872,16 @@ class _TrainingHistoryTile extends StatelessWidget {
               colors.surfaceContainer,
               colors.onSurfaceVariant,
             ),
+            RecentWorkoutMatchStatus.missed => (
+              Icons.event_busy_outlined,
+              colors.errorContainer,
+              colors.onErrorContainer,
+            ),
+            RecentWorkoutMatchStatus.skipped => (
+              Icons.skip_next_outlined,
+              colors.surfaceContainerHighest,
+              colors.onSurfaceVariant,
+            ),
           };
 
     final String title;
@@ -918,6 +928,16 @@ class _TrainingHistoryTile extends StatelessWidget {
           subtitle =
               '${scheduled.workout.totalDuration.inMinutes} Min. geplant · '
               'wartet auf Aktivität';
+
+        case RecentWorkoutMatchStatus.missed:
+          subtitle =
+              '${scheduled.workout.totalDuration.inMinutes} Min. geplant · '
+              'nicht absolviert';
+
+        case RecentWorkoutMatchStatus.skipped:
+          subtitle =
+              '${scheduled.workout.totalDuration.inMinutes} Min. geplant · '
+              'ausgesetzt';
       }
     }
 
