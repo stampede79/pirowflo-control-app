@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:pirowflo_control/models/calendar_event.dart';
 import 'package:pirowflo_control/models/endurain_activity.dart';
 import 'package:pirowflo_control/models/scheduled_workout.dart';
 import 'package:pirowflo_control/models/workout.dart';
@@ -25,16 +24,7 @@ void main() {
           ),
         ],
       ),
-      calendarEvent: CalendarEvent(
-        summary: 'Rudern – Test',
-        description: 'Geplantes Training',
-        start: start,
-        allDay: allDay,
-        href: '/test.ics',
-        etag: '"test-etag"',
-        uid: 'test-uid',
-        rawIcs: 'BEGIN:VCALENDAR\nEND:VCALENDAR',
-      ),
+      allDay: allDay,
     );
   }
 

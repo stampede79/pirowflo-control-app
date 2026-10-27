@@ -25,7 +25,7 @@ class WorkoutActivityMatcher {
         .map((activity) => _evaluate(workout, activity))
         .where(
           (match) =>
-              workout.calendarEvent.allDay ||
+              workout.allDay ||
               match.startDifference <= const Duration(hours: 3),
         )
         .toList();
@@ -43,7 +43,7 @@ class WorkoutActivityMatcher {
     ScheduledWorkout workout,
     EndurainActivity activity,
   ) {
-    final startDifference = workout.calendarEvent.allDay
+    final startDifference = workout.allDay
         ? Duration.zero
         : _absoluteDuration(
             workout.start.difference(activity.startTime.toLocal()),

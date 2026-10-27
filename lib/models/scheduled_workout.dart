@@ -1,22 +1,31 @@
-import 'calendar_event.dart';
+import 'api_workout.dart';
 import 'workout.dart';
 
-enum WorkoutPlanStatus { active, skipped }
-
 class ScheduledWorkout {
+  final int? id;
+  final int? trainingPlanId;
+
   final DateTime start;
   final Workout workout;
-  final CalendarEvent calendarEvent;
-  final WorkoutPlanStatus planStatus;
+
+  final String status;
+  final ApiWorkoutActivity? activity;
+
+  final bool allDay;
   final String? planStatusReason;
 
   const ScheduledWorkout({
+    this.id,
+    this.trainingPlanId,
     required this.start,
     required this.workout,
-    required this.calendarEvent,
-    this.planStatus = WorkoutPlanStatus.active,
+    this.status = 'planned',
+    this.activity,
+    this.allDay = false,
     this.planStatusReason,
   });
 
-  bool get isSkipped => planStatus == WorkoutPlanStatus.skipped;
+  bool get isSkipped => status == 'skipped';
+
+  bool get isCompleted => status == 'completed';
 }

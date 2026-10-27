@@ -6,7 +6,6 @@ import '../widgets/section_title.dart';
 import '../widgets/water_header.dart';
 import '../models/recent_workout_match.dart';
 import '../models/endurain_activity.dart';
-import '../utils/user_friendly_error.dart';
 import 'rowing_activity_detail_screen.dart';
 import '../models/training_history_entry.dart';
 import '../models/training_plan_draft.dart';
@@ -18,7 +17,7 @@ import '../utils/workout_display.dart';
 enum TrainingView { overview, plan, history }
 
 class TrainingScreen extends StatefulWidget {
-  final List<Workout> todaysWorkouts;
+  final List<ScheduledWorkout> todaysWorkouts;
   final List<ScheduledWorkout> upcomingWorkouts;
   final bool calendarLoading;
   final String? calendarError;
@@ -98,7 +97,7 @@ class _TrainingScreenState extends State<TrainingScreen> {
 }
 
 class _TrainingContent extends StatelessWidget {
-  final List<Workout> todaysWorkouts;
+  final List<ScheduledWorkout> todaysWorkouts;
   final List<ScheduledWorkout> upcomingWorkouts;
   final bool calendarLoading;
   final String? calendarError;
@@ -270,8 +269,11 @@ class _TrainingContent extends StatelessWidget {
                     ),
                   )
                 else
-                  ...todaysWorkouts.map(
-                    (workout) => Padding(
+                  ...todaysWorkouts.map((scheduled) {
+                    final workout = scheduled.workout;
+                    final activity = scheduled.activity;
+
+                    return Padding(
                       padding: const EdgeInsets.only(bottom: 12),
                       child: Card(
                         child: Padding(
@@ -295,7 +297,6 @@ class _TrainingContent extends StatelessWidget {
 
                               if (workout.description.isNotEmpty) ...[
                                 const SizedBox(height: 8),
-
                                 Text(
                                   workout.description,
                                   maxLines: 2,
@@ -306,20 +307,94 @@ class _TrainingContent extends StatelessWidget {
 
                               const SizedBox(height: 18),
 
-                              SizedBox(
-                                width: double.infinity,
-                                child: FilledButton.icon(
-                                  onPressed: () => onStartWorkout(workout),
-                                  icon: const Icon(Icons.play_arrow),
-                                  label: const Text('Training starten'),
+                              if (scheduled.isCompleted) ...[
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.check_circle,
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .primary,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'Training abgeschlossen',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleMedium,
+                                    ),
+                                  ],
                                 ),
-                              ),
+
+                                if (activity != null) ...[
+                                  const SizedBox(height: 12),
+
+                                  Wrap(
+                                    spacing: 16,
+                                    runSpacing: 8,
+                                    children: [
+                                      if (activity.durationMinutes != null)
+                                        Text(
+                                          '${activity.durationMinutes!.toStringAsFixed(1)} Min.',
+                                        ),
+                                      if (activity.distanceKm != null)
+                                        Text(
+                                          '${activity.distanceKm!.toStringAsFixed(2)} km',
+                                        ),
+                                      if (activity.averagePower != null)
+                                        Text(
+                                          'Ø ${activity.averagePower!.round()} W',
+                                        ),
+                                      if (activity.averageHr != null)
+                                        Text(
+                                          'Ø HF ${activity.averageHr!.round()}',
+                                        ),
+                                    ],
+                                  ),
+                                ],
+                              ] else if (scheduled.isSkipped) ...[
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.event_busy_outlined,
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .outline,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'Training entfällt',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleMedium,
+                                    ),
+                                  ],
+                                ),
+
+                                if (scheduled.planStatusReason != null) ...[
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    scheduled.planStatusReason!,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium,
+                                  ),
+                                ],
+                              ] else
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: FilledButton.icon(
+                                    onPressed: () => onStartWorkout(workout),
+                                    icon: const Icon(Icons.play_arrow),
+                                    label: const Text('Training starten'),
+                                  ),
+                                ),
                             ],
                           ),
                         ),
                       ),
-                    ),
-                  ),
+                    );
+                  }),
               ],
               if (view == TrainingView.overview &&
                   trainingPlanReview != null) ...[
@@ -760,9 +835,9 @@ class _TrainingHistoryTile extends StatelessWidget {
         return;
       }
 
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(UserFriendlyError.nextcloud(e))));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Training konnte nicht verknüpft werden: $e')),
+      );
     }
   }
 

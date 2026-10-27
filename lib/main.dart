@@ -8,9 +8,7 @@ import 'package:http/http.dart' as http;
 
 import 'screens/workout_screen.dart';
 import 'models/workout.dart';
-import 'services/workout_parser.dart';
 
-import 'services/nextcloud_calendar_service.dart';
 import 'screens/home_screen.dart';
 import 'models/scheduled_workout.dart';
 import 'screens/training_screen.dart';
@@ -25,17 +23,14 @@ import 'screens/welcome_screen.dart';
 import 'utils/user_friendly_error.dart';
 import 'models/recent_workout_match.dart';
 import 'services/recent_workout_matcher.dart';
-import 'models/pirowflo_result.dart';
-import 'services/pirowflo_result_parser.dart';
 import 'models/training_history_entry.dart';
 import 'services/training_history_merger.dart';
 import 'models/training_plan_draft.dart';
 import 'services/training_plan_service.dart';
 import 'models/training_plan_review.dart';
-import 'utils/pirowflo_plan_status.dart';
 import 'screens/coach_screen.dart';
 import 'models/coach_overview.dart';
-import 'models/today_workout_status.dart';
+import 'services/workout_service.dart';
 
 void main() {
   runApp(const PiRowFloApp());
@@ -67,11 +62,6 @@ class _ControlPageState extends State<ControlPage> {
 
   final serverController = TextEditingController();
   final apiKeyController = TextEditingController();
-  final calendarUrlController = TextEditingController(
-    text: 'https://cloud.roderwieser.com/remote.php/dav/calendars/admin/rudertraining/',
-  );
-  final nextcloudUserController = TextEditingController();
-  final nextcloudPasswordController = TextEditingController();
 
   final endurainServerController = TextEditingController(
     text: 'https://endurain.roderwieser.com',
@@ -119,8 +109,6 @@ class _ControlPageState extends State<ControlPage> {
     'ant': 'UNKNOWN',
   };
 
-  List<TodayWorkoutStatus> todayWorkoutStatuses = [];
-
   // SmartRow-Status
   bool smartRowAvailable = false;
   bool smartRowConnected = false;
@@ -138,7 +126,7 @@ class _ControlPageState extends State<ControlPage> {
 
   Timer? statusTimer;
 
-  List<Workout> todaysWorkouts = [];
+  List<ScheduledWorkout> todaysWorkouts = [];
   bool calendarLoading = false;
   String? calendarError;
   List<ScheduledWorkout> upcomingWorkouts = [];
@@ -150,57 +138,6 @@ class _ControlPageState extends State<ControlPage> {
   void initState() {
     super.initState();
     initializeApp();
-  }
-
-  Future<void> loadTodayWorkoutStatuses() async {
-    final server = serverController.text.trim();
-    final apiKey = apiKeyController.text.trim();
-
-    if (server.isEmpty || apiKey.isEmpty) {
-      if (!mounted) return;
-
-      setState(() {
-        todayWorkoutStatuses = [];
-      });
-
-      return;
-    }
-
-    try {
-      final response = await http
-          .get(
-            Uri.parse('$server/api/workouts/today'),
-            headers: {'X-API-Key': apiKey},
-          )
-          .timeout(const Duration(seconds: 15));
-
-      if (response.statusCode != 200) {
-        throw Exception('HTTP ${response.statusCode}');
-      }
-
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-
-      final rows = data['workouts'] as List<dynamic>? ?? const [];
-
-      final statuses = rows
-          .whereType<Map<String, dynamic>>()
-          .map(TodayWorkoutStatus.fromJson)
-          .toList();
-
-      if (!mounted) return;
-
-      setState(() {
-        todayWorkoutStatuses = statuses;
-      });
-    } catch (_) {
-      // Der zusätzliche Status darf die bisherige
-      // Home-Seite nicht unbrauchbar machen.
-      if (!mounted) return;
-
-      setState(() {
-        todayWorkoutStatuses = [];
-      });
-    }
   }
 
   Future<void> applyTrainingPlanReview() async {
@@ -216,7 +153,6 @@ class _ControlPageState extends State<ControlPage> {
       loadTodaysWorkout(),
       loadUpcomingWorkouts(),
       loadRecentWorkouts(),
-      loadTodayWorkoutStatuses(),
     ]);
   }
 
@@ -418,9 +354,6 @@ class _ControlPageState extends State<ControlPage> {
     statusTimer?.cancel();
     serverController.dispose();
     apiKeyController.dispose();
-    calendarUrlController.dispose();
-    nextcloudUserController.dispose();
-    nextcloudPasswordController.dispose();
     endurainServerController.dispose();
     endurainUserController.dispose();
     endurainPasswordController.dispose();
@@ -436,7 +369,6 @@ class _ControlPageState extends State<ControlPage> {
       loadRecentActivitiesForMatching(),
       loadWorkoutHistory(),
       loadHistoryActivities(),
-      loadTodayWorkoutStatuses(),
     ]);
   }
 
@@ -444,99 +376,76 @@ class _ControlPageState extends State<ControlPage> {
     ScheduledWorkout scheduled,
     EndurainActivity activity,
   ) async {
-    final calendarUrl = calendarUrlController.text.trim();
-    final username = nextcloudUserController.text.trim();
-    final password = nextcloudPasswordController.text;
+    final workoutId = scheduled.id;
 
-    if (calendarUrl.isEmpty || username.isEmpty || password.isEmpty) {
-      throw Exception('Nextcloud-Konfiguration unvollständig.');
+    if (workoutId == null) {
+      throw Exception('Training besitzt keine PiRowFlo-ID.');
     }
 
-    final service = NextcloudCalendarService(
-      calendarUrl: calendarUrl,
-      username: username,
-      appPassword: password,
-    );
+    final server = serverController.text.trim();
+    final apiKey = apiKeyController.text.trim();
 
-    final result = PiRowFloResult(
-      endurainActivityId: activity.id,
-      linkedAt: DateTime.now(),
-    );
+    if (server.isEmpty || apiKey.isEmpty) {
+      throw Exception('PiRowFlo-Konfiguration unvollständig.');
+    }
 
-    final updatedDescription = PiRowFloResultParser.upsert(
-      scheduled.calendarEvent.description,
-      result,
-    );
+    final response = await http
+        .post(
+          Uri.parse(
+            '$server/api/workouts/'
+            '$workoutId/activity-link',
+          ),
+          headers: {'X-API-Key': apiKey, 'Content-Type': 'application/json'},
+          body: jsonEncode({'endurain_activity_id': activity.id}),
+        )
+        .timeout(const Duration(seconds: 20));
 
-    await service.updateEventDescription(
-      scheduled.calendarEvent,
-      updatedDescription,
-    );
+    if (response.statusCode != 200) {
+      throw Exception(
+        'HTTP ${response.statusCode}: '
+        '${response.body}',
+      );
+    }
 
     await Future.wait([
       loadTodaysWorkout(),
       loadRecentWorkouts(),
-      loadTodayWorkoutStatuses(),
+      loadWorkoutHistory(),
     ]);
 
     resolveRecentWorkoutMatches();
+    resolveTrainingHistory();
   }
 
   Future<void> loadWorkoutHistory() async {
-    final calendarUrl = calendarUrlController.text.trim();
-    final username = nextcloudUserController.text.trim();
-    final password = nextcloudPasswordController.text;
+    final server = serverController.text.trim();
+    final apiKey = apiKeyController.text.trim();
 
-    if (calendarUrl.isEmpty || username.isEmpty || password.isEmpty) {
+    if (server.isEmpty || apiKey.isEmpty) {
       if (!mounted) return;
 
       setState(() {
         workoutHistory = [];
       });
+
       resolveTrainingHistory();
       return;
     }
 
     try {
-      final service = NextcloudCalendarService(
-        calendarUrl: calendarUrl,
-        username: username,
-        appPassword: password,
-      );
+      final service = WorkoutService(server: server, apiKey: apiKey);
 
       final now = DateTime.now();
-
       final today = DateTime(now.year, now.month, now.day);
 
       final start = today.subtract(Duration(days: historyDays));
 
       final end = today.add(const Duration(days: 1));
 
-      final events = await service.getEventsForRange(start, end);
-
-      final workouts = <ScheduledWorkout>[];
-
-      for (final event in events) {
-        final workout = WorkoutParser.parse(
-          name: event.summary,
-          description: event.description,
-        );
-
-        if (workout == null) {
-          continue;
-        }
-        final planStatus = parsePiRowFloPlanStatus(event.description);
-
-        workouts.add(
-          ScheduledWorkout(
-            start: event.start.toLocal(),
-            workout: workout,
-            calendarEvent: event,
-            planStatus: planStatus.status,
-            planStatusReason: planStatus.reason,
-          ),
-        );
-      }
+      final workouts = await service.getScheduledWorkouts(
+        start: start,
+        end: end,
+      );
 
       workouts.sort((a, b) => b.start.compareTo(a.start));
 
@@ -545,67 +454,42 @@ class _ControlPageState extends State<ControlPage> {
       setState(() {
         workoutHistory = workouts;
       });
+
       resolveTrainingHistory();
     } catch (_) {
-      // Historie darf den normalen Trainingskalender nicht blockieren.
+      // Historie darf die normale App nicht blockieren.
     }
   }
 
   Future<void> loadRecentWorkouts() async {
-    final calendarUrl = calendarUrlController.text.trim();
-    final username = nextcloudUserController.text.trim();
-    final password = nextcloudPasswordController.text;
+    final server = serverController.text.trim();
+    final apiKey = apiKeyController.text.trim();
 
-    if (calendarUrl.isEmpty || username.isEmpty || password.isEmpty) {
+    if (server.isEmpty || apiKey.isEmpty) {
       if (!mounted) return;
 
       setState(() {
         recentWorkouts = [];
-        resolveRecentWorkoutMatches();
       });
+
+      resolveRecentWorkoutMatches();
       return;
     }
 
     try {
-      final service = NextcloudCalendarService(
-        calendarUrl: calendarUrl,
-        username: username,
-        appPassword: password,
-      );
+      final service = WorkoutService(server: server, apiKey: apiKey);
 
       final now = DateTime.now();
-
       final today = DateTime(now.year, now.month, now.day);
 
       final start = today.subtract(const Duration(days: 7));
 
       final end = today.add(const Duration(days: 1));
 
-      final events = await service.getEventsForRange(start, end);
-
-      final workouts = <ScheduledWorkout>[];
-
-      for (final event in events) {
-        final workout = WorkoutParser.parse(
-          name: event.summary,
-          description: event.description,
-        );
-
-        if (workout == null) {
-          continue;
-        }
-        final planStatus = parsePiRowFloPlanStatus(event.description);
-
-        workouts.add(
-          ScheduledWorkout(
-            start: event.start.toLocal(),
-            workout: workout,
-            calendarEvent: event,
-            planStatus: planStatus.status,
-            planStatusReason: planStatus.reason,
-          ),
-        );
-      }
+      final workouts = await service.getScheduledWorkouts(
+        start: start,
+        end: end,
+      );
 
       workouts.sort((a, b) => b.start.compareTo(a.start));
 
@@ -614,18 +498,16 @@ class _ControlPageState extends State<ControlPage> {
       setState(() {
         recentWorkouts = workouts;
       });
+
+      resolveRecentWorkoutMatches();
     } catch (_) {
-      // Fehler beim Laden vergangener Trainings soll den normalen
-      // Trainingskalender nicht blockieren.
+      // Recent-Matching darf die App nicht blockieren.
     }
   }
 
   Future<void> loadConfiguration() async {
     final server = await storage.read(key: 'server');
     final apiKey = await storage.read(key: 'apiKey');
-    final calendarUrl = await storage.read(key: 'calendarUrl');
-    final nextcloudUser = await storage.read(key: 'nextcloudUser');
-    final nextcloudPassword = await storage.read(key: 'nextcloudPassword');
     final endurainServer = await storage.read(key: 'endurainServer');
     final endurainUser = await storage.read(key: 'endurainUser');
     final endurainAccessToken = await storage.read(key: 'endurainAccessToken');
@@ -637,12 +519,6 @@ class _ControlPageState extends State<ControlPage> {
 
     serverController.text = server ?? '';
     apiKeyController.text = apiKey ?? '';
-    if (calendarUrl != null && calendarUrl.isNotEmpty) {
-      calendarUrlController.text = calendarUrl;
-    }
-
-    nextcloudUserController.text = nextcloudUser ?? '';
-    nextcloudPasswordController.text = nextcloudPassword ?? '';
 
     if (endurainServer != null && endurainServer.isNotEmpty) {
       endurainServerController.text = endurainServer;
@@ -675,7 +551,6 @@ class _ControlPageState extends State<ControlPage> {
     await loadHistoryActivities();
     await loadTrainingPlanDraft();
     await loadTrainingPlanReview();
-    await loadTodayWorkoutStatuses();
   }
 
   Future<void> saveConfiguration() async {
@@ -690,21 +565,6 @@ class _ControlPageState extends State<ControlPage> {
     await storage.write(key: 'server', value: server);
 
     await storage.write(key: 'apiKey', value: apiKeyController.text.trim());
-
-    await storage.write(
-      key: 'calendarUrl',
-      value: calendarUrlController.text.trim(),
-    );
-
-    await storage.write(
-      key: 'nextcloudUser',
-      value: nextcloudUserController.text.trim(),
-    );
-
-    await storage.write(
-      key: 'nextcloudPassword',
-      value: nextcloudPasswordController.text,
-    );
 
     if (!mounted) return;
 
@@ -727,7 +587,6 @@ class _ControlPageState extends State<ControlPage> {
     await loadHistoryActivities();
     await loadTrainingPlanDraft();
     await loadTrainingPlanReview();
-    await loadTodayWorkoutStatuses();
   }
 
   Map<String, String> get headers => {
@@ -1262,56 +1121,17 @@ class _ControlPageState extends State<ControlPage> {
     await loadCoachOverview();
   }
 
-  Future<void> testNextcloudCalendar() async {
-    final calendarUrl = calendarUrlController.text.trim();
-    final username = nextcloudUserController.text.trim();
-    final password = nextcloudPasswordController.text;
-
-    if (calendarUrl.isEmpty || username.isEmpty || password.isEmpty) {
-      setState(() {
-        calendarTestResult = 'Nextcloud-Konfiguration unvollständig';
-      });
-      return;
-    }
-
-    setState(() {
-      calendarTestResult = 'Kalender wird geprüft …';
-    });
-
-    try {
-      final service = NextcloudCalendarService(
-        calendarUrl: calendarUrl,
-        username: username,
-        appPassword: password,
-      );
-
-      final events = await service.getEventsForDay(DateTime.now());
-
-      if (!mounted) return;
-
-      setState(() {
-        if (events.isEmpty) {
-          calendarTestResult = 'Verbindung erfolgreich – heute kein Termin';
-        } else {
-          calendarTestResult =
-              'Verbindung erfolgreich – heute: ${events.first.summary}';
-        }
-      });
-    } catch (e) {
-      if (!mounted) return;
-
-      setState(() {
-        calendarTestResult = UserFriendlyError.nextcloud(e);
-      });
-    }
-  }
-
   Future<void> loadTodaysWorkout() async {
-    final calendarUrl = calendarUrlController.text.trim();
-    final username = nextcloudUserController.text.trim();
-    final password = nextcloudPasswordController.text;
+    final server = serverController.text.trim();
+    final apiKey = apiKeyController.text.trim();
 
-    if (calendarUrl.isEmpty || username.isEmpty || password.isEmpty) {
+    if (server.isEmpty || apiKey.isEmpty) {
+      if (!mounted) return;
+
+      setState(() {
+        todaysWorkouts = [];
+      });
+
       return;
     }
 
@@ -1321,45 +1141,31 @@ class _ControlPageState extends State<ControlPage> {
     });
 
     try {
-      final service = NextcloudCalendarService(
-        calendarUrl: calendarUrl,
-        username: username,
-        appPassword: password,
+      final service = WorkoutService(server: server, apiKey: apiKey);
+
+      final now = DateTime.now();
+
+      final today = DateTime(now.year, now.month, now.day);
+
+      final tomorrow = today.add(const Duration(days: 1));
+
+      final workouts = await service.getScheduledWorkouts(
+        start: today,
+        end: tomorrow,
       );
-
-      final events = await service.getEventsForDay(DateTime.now());
-
-      final foundWorkouts = <Workout>[];
-
-      for (final event in events) {
-        final workout = WorkoutParser.parse(
-          name: event.summary,
-          description: event.description,
-        );
-
-        if (workout == null) {
-          continue;
-        }
-
-        final result = PiRowFloResultParser.parse(event.description);
-
-        if (result != null) {
-          continue;
-        }
-
-        foundWorkouts.add(workout);
-      }
 
       if (!mounted) return;
 
       setState(() {
-        todaysWorkouts = foundWorkouts;
+        todaysWorkouts = workouts;
       });
     } catch (e) {
       if (!mounted) return;
 
       setState(() {
-        calendarError = UserFriendlyError.nextcloud(e);
+        calendarError =
+            'Trainingsdaten konnten nicht '
+            'geladen werden: $e';
       });
     } finally {
       if (mounted) {
@@ -1371,30 +1177,25 @@ class _ControlPageState extends State<ControlPage> {
   }
 
   Future<void> loadUpcomingWorkouts() async {
-    final calendarUrl = calendarUrlController.text.trim();
-    final username = nextcloudUserController.text.trim();
-    final password = nextcloudPasswordController.text;
+    final server = serverController.text.trim();
+    final apiKey = apiKeyController.text.trim();
 
-    if (calendarUrl.isEmpty || username.isEmpty || password.isEmpty) {
+    if (server.isEmpty || apiKey.isEmpty) {
       if (!mounted) return;
 
       setState(() {
         upcomingWorkouts = [];
       });
+
       return;
     }
 
     try {
-      final service = NextcloudCalendarService(
-        calendarUrl: calendarUrl,
-        username: username,
-        appPassword: password,
-      );
+      final service = WorkoutService(server: server, apiKey: apiKey);
 
       final now = DateTime.now();
 
-      // "Kommende Trainings" beginnt morgen.
-      // Das heutige Training wird separat über todaysWorkout behandelt.
+      // Kommende Trainings beginnen morgen.
       final start = DateTime(now.year, now.month, now.day + 1);
 
       // Bis zum Ende des Folgemonats laden.
@@ -1404,48 +1205,10 @@ class _ControlPageState extends State<ControlPage> {
           ? DateTime(now.year + 1, 1, 1)
           : DateTime(now.year, now.month + 2, 1);
 
-      final events = await service.getEventsForRange(start, end);
-
-      final workouts = <ScheduledWorkout>[];
-
-      for (final event in events) {
-        final eventDate = event.start.toLocal();
-
-        final eventDay = DateTime(
-          eventDate.year,
-          eventDate.month,
-          eventDate.day,
-        );
-
-        // Schutz gegen CalDAV-/UTC-Randeffekte:
-        // heutige oder ältere Termine niemals übernehmen.
-        if (eventDay.isBefore(start)) {
-          continue;
-        }
-
-        final workout = WorkoutParser.parse(
-          name: event.summary,
-          description: event.description,
-        );
-
-        if (workout == null) {
-          continue;
-        }
-
-        final planStatus = parsePiRowFloPlanStatus(event.description);
-
-        workouts.add(
-          ScheduledWorkout(
-            start: eventDate,
-            workout: workout,
-            calendarEvent: event,
-            planStatus: planStatus.status,
-            planStatusReason: planStatus.reason,
-          ),
-        );
-      }
-
-      workouts.sort((a, b) => a.start.compareTo(b.start));
+      final workouts = await service.getScheduledWorkouts(
+        start: start,
+        end: end,
+      );
 
       if (!mounted) return;
 
@@ -1535,7 +1298,6 @@ class _ControlPageState extends State<ControlPage> {
       loadTodaysWorkout(),
       loadUpcomingWorkouts(),
       loadWorkoutHistory(),
-      loadTodayWorkoutStatuses(),
     ]);
   }
 
@@ -1609,46 +1371,6 @@ class _ControlPageState extends State<ControlPage> {
                   ),
                 ),
 
-                const SizedBox(height: 12),
-
-                TextField(
-                  controller: calendarUrlController,
-                  decoration: const InputDecoration(labelText: 'CalDAV-URL'),
-                  keyboardType: TextInputType.url,
-                  autocorrect: false,
-                ),
-
-                const SizedBox(height: 12),
-
-                TextField(
-                  controller: nextcloudUserController,
-                  decoration: const InputDecoration(
-                    labelText: 'Nextcloud-Benutzer',
-                  ),
-                  autocorrect: false,
-                ),
-
-                const SizedBox(height: 12),
-
-                TextField(
-                  controller: nextcloudPasswordController,
-                  decoration: const InputDecoration(labelText: 'App-Passwort'),
-                  obscureText: true,
-                  autocorrect: false,
-                ),
-
-                const SizedBox(height: 16),
-
-                OutlinedButton.icon(
-                  onPressed: testNextcloudCalendar,
-                  icon: const Icon(Icons.calendar_month),
-                  label: const Text('Kalender testen'),
-                ),
-
-                if (calendarTestResult != null) ...[
-                  const SizedBox(height: 12),
-                  Text(calendarTestResult!),
-                ],
                 const SizedBox(height: 24),
                 const Divider(),
                 const SizedBox(height: 12),
@@ -1858,7 +1580,6 @@ class _ControlPageState extends State<ControlPage> {
           calendarLoading: calendarLoading,
           calendarError: calendarError,
           todaysWorkouts: todaysWorkouts,
-          todayWorkoutStatuses: todayWorkoutStatuses,
           nextWorkout: nextWorkout,
           onStartWorkout: startWorkout,
           onStartFreeWorkout: startFreeWorkout,

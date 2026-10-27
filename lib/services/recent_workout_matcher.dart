@@ -1,7 +1,6 @@
 import '../models/endurain_activity.dart';
 import '../models/recent_workout_match.dart';
 import '../models/scheduled_workout.dart';
-import 'pirowflo_result_parser.dart';
 import 'workout_activity_matcher.dart';
 
 class RecentWorkoutMatcher {
@@ -13,36 +12,50 @@ class RecentWorkoutMatcher {
     final usedActivityIds = <int>{};
 
     // Bereits bestehende Verknüpfungen haben immer Vorrang.
+    // Bereits in SQLite bestehende Verknüpfungen
+    // haben immer Vorrang.
     for (final workout in workouts) {
-      final result = PiRowFloResultParser.parse(
-        workout.calendarEvent.description,
-      );
+      final linked = workout.activity;
 
-      if (result == null) {
+      if (linked == null) {
         continue;
       }
 
       EndurainActivity? linkedActivity;
 
       for (final activity in activities) {
-        if (activity.id == result.endurainActivityId) {
+        if (activity.id == linked.endurainActivityId) {
           linkedActivity = activity;
           break;
         }
       }
 
-      usedActivityIds.add(result.endurainActivityId);
+      usedActivityIds.add(linked.endurainActivityId);
 
       resolved[workout] = RecentWorkoutMatch(
         scheduledWorkout: workout,
-        result: result,
+        isLinked: true,
         linkedActivity: linkedActivity,
       );
     }
 
     final openWorkouts = workouts
-        .where((workout) => !resolved.containsKey(workout))
+        .where(
+          (workout) =>
+              !resolved.containsKey(workout) &&
+              !workout.isSkipped &&
+              !workout.isCompleted,
+        )
         .toList();
+    for (final workout in workouts) {
+      if (resolved.containsKey(workout)) {
+        continue;
+      }
+
+      if (workout.isSkipped) {
+        resolved[workout] = RecentWorkoutMatch(scheduledWorkout: workout);
+      }
+    }
 
     final availableActivities = activities
         .where((activity) => !usedActivityIds.contains(activity.id))

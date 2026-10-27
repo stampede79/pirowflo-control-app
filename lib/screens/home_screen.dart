@@ -5,7 +5,6 @@ import '../models/workout.dart';
 import '../widgets/section_title.dart';
 import '../widgets/system_status_card.dart';
 import '../widgets/water_header.dart';
-import '../models/today_workout_status.dart';
 
 class HomeScreen extends StatelessWidget {
   final bool running;
@@ -16,12 +15,11 @@ class HomeScreen extends StatelessWidget {
 
   final bool calendarLoading;
   final String? calendarError;
-  final List<Workout> todaysWorkouts;
+  final List<ScheduledWorkout> todaysWorkouts;
 
   final void Function(Workout) onStartWorkout;
   final ScheduledWorkout? nextWorkout;
   final void Function(ScheduledWorkout) onOpenWorkout;
-  final List<TodayWorkoutStatus> todayWorkoutStatuses;
   final VoidCallback onStartFreeWorkout;
 
   const HomeScreen({
@@ -36,7 +34,6 @@ class HomeScreen extends StatelessWidget {
     required this.onStartWorkout,
     required this.nextWorkout,
     required this.onOpenWorkout,
-    required this.todayWorkoutStatuses,
     required this.onStartFreeWorkout,
   });
 
@@ -48,16 +45,6 @@ class HomeScreen extends StatelessWidget {
     return '$weekday, '
         '${date.day.toString().padLeft(2, '0')}.'
         '${date.month.toString().padLeft(2, '0')}.';
-  }
-
-  TodayWorkoutStatus? _statusFor(Workout workout) {
-    for (final status in todayWorkoutStatuses) {
-      if (status.name == workout.name) {
-        return status;
-      }
-    }
-
-    return null;
   }
 
   @override
@@ -144,10 +131,10 @@ class HomeScreen extends StatelessWidget {
                   ),
                 )
               else
-                ...todaysWorkouts.map((workout) {
-                  final status = _statusFor(workout);
-                  final completed = status?.completed ?? false;
-                  final activity = status?.activity;
+                ...todaysWorkouts.map((scheduled) {
+                  final workout = scheduled.workout;
+                  final completed = scheduled.isCompleted;
+                  final activity = scheduled.activity;
 
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 12),
