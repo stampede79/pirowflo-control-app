@@ -955,6 +955,7 @@ class _TrainingHistoryTile extends StatelessWidget {
             builder: (_) => RowingActivityDetailScreen(
               activity: freeActivity,
               endurainServer: endurainServer,
+              analysis: entry.analysis,
             ),
           ),
         );
@@ -969,6 +970,7 @@ class _TrainingHistoryTile extends StatelessWidget {
             builder: (_) => RowingActivityDetailScreen(
               activity: linkedActivity,
               endurainServer: endurainServer,
+              analysis: entry.analysis,
             ),
           ),
         );

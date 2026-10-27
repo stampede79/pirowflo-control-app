@@ -5,15 +5,18 @@ import '../models/endurain_stream.dart';
 import '../services/endurain_service.dart';
 import '../widgets/rowing_stream_chart.dart';
 import '../utils/user_friendly_error.dart';
+import '../models/workout_analysis.dart';
 
 class RowingActivityDetailScreen extends StatefulWidget {
   final EndurainActivity activity;
   final String endurainServer;
+  final WorkoutAnalysis? analysis;
 
   const RowingActivityDetailScreen({
     super.key,
     required this.activity,
     required this.endurainServer,
+    this.analysis,
   });
 
   @override
@@ -23,6 +26,25 @@ class RowingActivityDetailScreen extends StatefulWidget {
 
 class _RowingActivityDetailScreenState
     extends State<RowingActivityDetailScreen> {
+  String _analysisLabel(String value) {
+    return switch (value) {
+      'good' => 'Gut',
+      'partial' => 'Teilweise',
+      'poor' => 'Schlecht',
+      'appropriate' => 'Angemessen',
+      'low' => 'Niedrig',
+      'high' => 'Hoch',
+      'moderate' => 'Moderat',
+      'easy' => 'Locker',
+      'hard' => 'Hoch',
+      'stable' => 'Stabil',
+      'improving' => 'Verbessernd',
+      'declining' => 'Rückläufig',
+      'concerning' => 'Auffällig',
+      _ => value,
+    };
+  }
+
   String _formatDate(DateTime date) {
     return '${date.day.toString().padLeft(2, '0')}.'
         '${date.month.toString().padLeft(2, '0')}.'
@@ -302,6 +324,69 @@ class _RowingActivityDetailScreenState
             ],
 
             const SizedBox(height: 18),
+
+            if (widget.analysis != null) ...[
+              const SizedBox(height: 18),
+
+              _Section(
+                title: 'Coach-Analyse',
+                icon: Icons.psychology_outlined,
+                children: [
+                  if (widget.analysis!.execution != null)
+                    _ValueRow(
+                      label: 'Umsetzung',
+                      value: _analysisLabel(widget.analysis!.execution!),
+                    ),
+
+                  if (widget.analysis!.loadAssessment != null)
+                    _ValueRow(
+                      label: 'Belastung',
+                      value: _analysisLabel(widget.analysis!.loadAssessment!),
+                    ),
+
+                  if (widget.analysis!.effort != null)
+                    _ValueRow(
+                      label: 'Anstrengung',
+                      value: _analysisLabel(widget.analysis!.effort!),
+                    ),
+
+                  if (widget.analysis!.progression != null)
+                    _ValueRow(
+                      label: 'Entwicklung',
+                      value: _analysisLabel(widget.analysis!.progression!),
+                    ),
+
+                  if (widget.analysis!.recoveryConcern == true)
+                    const _ValueRow(label: 'Regeneration', value: 'Beobachten'),
+
+                  if (widget.analysis!.summary.isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(widget.analysis!.summary),
+                    ),
+                  ],
+
+                  if (widget.analysis!.recommendation != null &&
+                      widget.analysis!.recommendation!.isNotEmpty) ...[
+                    const SizedBox(height: 18),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Empfehlung',
+                        style: Theme.of(context).textTheme.titleSmall
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(widget.analysis!.recommendation!),
+                    ),
+                  ],
+                ],
+              ),
+            ],
 
             _Section(
               title: 'Energie',

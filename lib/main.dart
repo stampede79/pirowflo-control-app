@@ -31,6 +31,8 @@ import 'models/training_plan_review.dart';
 import 'screens/coach_screen.dart';
 import 'models/coach_overview.dart';
 import 'services/workout_service.dart';
+import 'models/workout_analysis.dart';
+import 'services/training_history_service.dart';
 
 void main() {
   runApp(const PiRowFloApp());
@@ -84,6 +86,7 @@ class _ControlPageState extends State<ControlPage> {
   List<ScheduledWorkout> workoutHistory = [];
   List<EndurainActivity> historyActivities = [];
   List<TrainingHistoryEntry> trainingHistory = [];
+  Map<int, WorkoutAnalysis> historyAnalyses = {};
   int historyDays = 30;
   bool historyLoadingMore = false;
   bool historyHasMore = true;
@@ -138,6 +141,45 @@ class _ControlPageState extends State<ControlPage> {
   void initState() {
     super.initState();
     initializeApp();
+  }
+
+  Future<void> loadHistoryAnalyses() async {
+    final server = serverController.text.trim();
+    final apiKey = apiKeyController.text.trim();
+
+    if (server.isEmpty || apiKey.isEmpty) {
+      if (!mounted) return;
+
+      setState(() {
+        historyAnalyses = {};
+      });
+
+      resolveTrainingHistory();
+      return;
+    }
+
+    try {
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+
+      final start = today.subtract(Duration(days: historyDays));
+      final end = today.add(const Duration(days: 1));
+
+      final service = TrainingHistoryService(server: server, apiKey: apiKey);
+
+      final analyses = await service.getAnalyses(start: start, end: end);
+
+      if (!mounted) return;
+
+      setState(() {
+        historyAnalyses = analyses;
+      });
+
+      resolveTrainingHistory();
+    } catch (e, stackTrace) {
+      debugPrint('loadHistoryAnalyses failed: $e');
+      debugPrintStack(stackTrace: stackTrace);
+    }
   }
 
   Future<void> applyTrainingPlanReview() async {
@@ -224,7 +266,11 @@ class _ControlPageState extends State<ControlPage> {
       for (var step = 0; step < maxStepsPerLoad; step++) {
         historyDays += stepDays;
 
-        await Future.wait([loadWorkoutHistory(), loadHistoryActivities()]);
+        await Future.wait([
+          loadWorkoutHistory(),
+          loadHistoryActivities(),
+          loadHistoryAnalyses(),
+        ]);
 
         if (!mounted) return;
 
@@ -552,6 +598,7 @@ class _ControlPageState extends State<ControlPage> {
     await loadHistoryActivities();
     await loadTrainingPlanDraft();
     await loadTrainingPlanReview();
+    await loadHistoryAnalyses();
   }
 
   Future<void> saveConfiguration() async {
@@ -588,6 +635,7 @@ class _ControlPageState extends State<ControlPage> {
     await loadHistoryActivities();
     await loadTrainingPlanDraft();
     await loadTrainingPlanReview();
+    await loadHistoryAnalyses();
   }
 
   Map<String, String> get headers => {
@@ -611,6 +659,7 @@ class _ControlPageState extends State<ControlPage> {
     final history = TrainingHistoryMerger.merge(
       workoutHistory,
       historyActivities,
+      analyses: historyAnalyses,
     );
 
     if (!mounted) return;

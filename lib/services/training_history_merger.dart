@@ -2,12 +2,14 @@ import '../models/endurain_activity.dart';
 import '../models/scheduled_workout.dart';
 import '../models/training_history_entry.dart';
 import 'recent_workout_matcher.dart';
+import '../models/workout_analysis.dart';
 
 class TrainingHistoryMerger {
   static List<TrainingHistoryEntry> merge(
     List<ScheduledWorkout> workouts,
-    List<EndurainActivity> activities,
-  ) {
+    List<EndurainActivity> activities, {
+    Map<int, WorkoutAnalysis> analyses = const {},
+  }) {
     final matches = RecentWorkoutMatcher.resolve(workouts, activities);
 
     final entries = <TrainingHistoryEntry>[];
@@ -20,7 +22,12 @@ class TrainingHistoryMerger {
         assignedActivityIds.add(activity.id);
       }
 
-      entries.add(TrainingHistoryEntry.planned(match: match));
+      entries.add(
+        TrainingHistoryEntry.planned(
+          match: match,
+          analysis: activity == null ? null : analyses[activity.id],
+        ),
+      );
     }
 
     // Endurain-Aktivitäten, die keinem Kalendertraining zugeordnet
@@ -30,7 +37,12 @@ class TrainingHistoryMerger {
         continue;
       }
 
-      entries.add(TrainingHistoryEntry.free(activity: activity));
+      entries.add(
+        TrainingHistoryEntry.free(
+          activity: activity,
+          analysis: analyses[activity.id],
+        ),
+      );
     }
 
     entries.sort((a, b) => b.date.compareTo(a.date));
