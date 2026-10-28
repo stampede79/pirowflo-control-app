@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/endurain_summary.dart';
+import '../widgets/water_header.dart';
 
 class StatisticsScreen extends StatelessWidget {
   final EndurainSummary? summary;
@@ -39,147 +40,172 @@ class StatisticsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return RefreshIndicator(
-      onRefresh: () async => onRefresh(),
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
-        children: [
-          SegmentedButton<EndurainSummaryPeriod>(
-            segments: EndurainSummaryPeriod.values
-                .map(
-                  (period) =>
-                      ButtonSegment(value: period, label: Text(period.label)),
-                )
-                .toList(),
-            selected: {period},
-            showSelectedIcon: false,
-            onSelectionChanged: loading
-                ? null
-                : (selection) {
-                    onPeriodChanged(selection.first);
-                  },
+    return Column(
+      children: [
+        const WaterHeader(
+          height: 210,
+          title: 'Statistik',
+          subtitle: 'Deine Entwicklung im Überblick',
+        ),
+
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
+          child: SizedBox(
+            width: double.infinity,
+            child: SegmentedButton<EndurainSummaryPeriod>(
+              segments: EndurainSummaryPeriod.values
+                  .map(
+                    (period) =>
+                        ButtonSegment(value: period, label: Text(period.label)),
+                  )
+                  .toList(),
+              selected: {period},
+              showSelectedIcon: false,
+              onSelectionChanged: loading
+                  ? null
+                  : (selection) {
+                      onPeriodChanged(selection.first);
+                    },
+            ),
           ),
+        ),
 
-          const SizedBox(height: 28),
-          Text(switch (period) {
-            EndurainSummaryPeriod.week => 'Diese Woche',
-            EndurainSummaryPeriod.month => 'Dieser Monat',
-            EndurainSummaryPeriod.year => 'Dieses Jahr',
-            EndurainSummaryPeriod.lifetime => 'Gesamt',
-          }, style: Theme.of(context).textTheme.headlineMedium),
-          const SizedBox(height: 6),
-          Text(
-            'Deine Indoor-Ruderaktivitäten aus Endurain',
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: () async => onRefresh(),
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+              children: [
+                Text(switch (period) {
+                  EndurainSummaryPeriod.week => 'Diese Woche',
+                  EndurainSummaryPeriod.month => 'Dieser Monat',
+                  EndurainSummaryPeriod.year => 'Dieses Jahr',
+                  EndurainSummaryPeriod.lifetime => 'Gesamt',
+                }, style: Theme.of(context).textTheme.headlineMedium),
 
-          const SizedBox(height: 24),
+                const SizedBox(height: 6),
 
-          if (loading && summary == null)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.all(40),
-                child: CircularProgressIndicator(),
-              ),
-            )
-          else if (error != null && summary == null)
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  children: [
-                    Icon(
-                      Icons.cloud_off,
-                      color: Theme.of(context).colorScheme.error,
+                Text(
+                  'Deine Indoor-Ruderaktivitäten aus Endurain',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+
+                const SizedBox(height: 24),
+
+                if (loading && summary == null)
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(40),
+                      child: CircularProgressIndicator(),
                     ),
-                    const SizedBox(height: 12),
-                    Text(error!, textAlign: TextAlign.center),
+                  )
+                else if (error != null && summary == null)
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        children: [
+                          Icon(
+                            Icons.cloud_off,
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                          const SizedBox(height: 12),
+                          Text(error!, textAlign: TextAlign.center),
+                          const SizedBox(height: 16),
+                          OutlinedButton.icon(
+                            onPressed: onRefresh,
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('Erneut versuchen'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                else if (summary != null) ...[
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _StatisticCard(
+                          icon: Icons.rowing,
+                          value: '${summary!.activityCount}',
+                          label: summary!.activityCount == 1
+                              ? 'Training'
+                              : 'Trainings',
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _StatisticCard(
+                          icon: Icons.straighten,
+                          value: _formatDistance(summary!.distance),
+                          label: 'Distanz',
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _StatisticCard(
+                          icon: Icons.timer_outlined,
+                          value: _formatDuration(summary!.duration),
+                          label: 'Trainingszeit',
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _StatisticCard(
+                          icon: Icons.local_fire_department_outlined,
+                          value: '${summary!.calories.round()}',
+                          label: 'kcal',
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  if (summary!.breakdown.isNotEmpty) ...[
+                    const SizedBox(height: 32),
+
+                    Text(switch (period) {
+                      EndurainSummaryPeriod.week => 'Wochenverlauf',
+                      EndurainSummaryPeriod.month => 'Monatsverlauf',
+                      EndurainSummaryPeriod.year => 'Jahresverlauf',
+                      EndurainSummaryPeriod.lifetime => 'Entwicklung',
+                    }, style: Theme.of(context).textTheme.titleLarge),
+
                     const SizedBox(height: 16),
-                    OutlinedButton.icon(
-                      onPressed: onRefresh,
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('Erneut versuchen'),
+
+                    _DistanceChart(
+                      breakdown: summary!.breakdown,
+                      period: period,
                     ),
                   ],
-                ),
-              ),
-            )
-          else if (summary != null) ...[
-            Row(
-              children: [
-                Expanded(
-                  child: _StatisticCard(
-                    icon: Icons.rowing,
-                    value: '${summary!.activityCount}',
-                    label: summary!.activityCount == 1
-                        ? 'Training'
-                        : 'Trainings',
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _StatisticCard(
-                    icon: Icons.straighten,
-                    value: _formatDistance(summary!.distance),
-                    label: 'Distanz',
-                  ),
-                ),
+
+                  if (loading) ...[
+                    const SizedBox(height: 20),
+                    const LinearProgressIndicator(),
+                  ],
+
+                  if (error != null) ...[
+                    const SizedBox(height: 16),
+                    Text(
+                      error!,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                  ],
+                ],
               ],
             ),
-
-            const SizedBox(height: 12),
-
-            Row(
-              children: [
-                Expanded(
-                  child: _StatisticCard(
-                    icon: Icons.timer_outlined,
-                    value: _formatDuration(summary!.duration),
-                    label: 'Trainingszeit',
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _StatisticCard(
-                    icon: Icons.local_fire_department_outlined,
-                    value: '${summary!.calories.round()}',
-                    label: 'kcal',
-                  ),
-                ),
-              ],
-            ),
-
-            if (summary!.breakdown.isNotEmpty) ...[
-              const SizedBox(height: 32),
-
-              Text(switch (period) {
-                EndurainSummaryPeriod.week => 'Wochenverlauf',
-                EndurainSummaryPeriod.month => 'Monatsverlauf',
-                EndurainSummaryPeriod.year => 'Jahresverlauf',
-                EndurainSummaryPeriod.lifetime => 'Entwicklung',
-              }, style: Theme.of(context).textTheme.titleLarge),
-
-              const SizedBox(height: 16),
-
-              _DistanceChart(breakdown: summary!.breakdown, period: period),
-            ],
-
-            if (loading) ...[
-              const SizedBox(height: 20),
-              const LinearProgressIndicator(),
-            ],
-
-            if (error != null) ...[
-              const SizedBox(height: 16),
-              Text(
-                error!,
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-            ],
-          ],
-        ],
-      ),
+          ),
+        ),
+      ],
     );
   }
 }

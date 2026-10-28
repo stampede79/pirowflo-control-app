@@ -6,12 +6,10 @@ import '../widgets/workout_timeline.dart';
 class WorkoutDetailScreen extends StatelessWidget {
   final Workout workout;
   final DateTime? scheduledDate;
-  final VoidCallback onStartWorkout;
 
   const WorkoutDetailScreen({
     super.key,
     required this.workout,
-    required this.onStartWorkout,
     this.scheduledDate,
   });
 
@@ -29,17 +27,6 @@ class WorkoutDetailScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Training')),
-
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: FilledButton.icon(
-            onPressed: onStartWorkout,
-            icon: const Icon(Icons.play_arrow),
-            label: const Text('Training jetzt starten'),
-          ),
-        ),
-      ),
 
       body: SafeArea(
         child: ListView(
@@ -75,7 +62,6 @@ class WorkoutDetailScreen extends StatelessWidget {
 
             WorkoutTimeline(workout: workout),
 
-            // Abstand zum feststehenden Startbutton.
             const SizedBox(height: 24),
           ],
         ),

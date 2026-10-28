@@ -185,13 +185,25 @@ class _TrainingContent extends StatelessWidget {
 
       workoutsByMonth.putIfAbsent(month, () => []).add(scheduled);
     }
-    return ListView(
-      padding: EdgeInsets.zero,
+
+    TrainingHistoryEntry? latestCompletedEntry;
+
+    for (final entry in trainingHistory) {
+      final match = entry.match;
+
+      if (match != null &&
+          match.scheduledWorkout.isCompleted &&
+          match.linkedActivity != null) {
+        latestCompletedEntry = entry;
+        break;
+      }
+    }
+    return Column(
       children: [
         const WaterHeader(height: 210),
 
         Padding(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
           child: SizedBox(
             width: double.infinity,
             child: SegmentedButton<TrainingView>(
@@ -221,332 +233,383 @@ class _TrainingContent extends StatelessWidget {
           ),
         ),
 
-        const SizedBox(height: 6),
-
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+        Expanded(
+          child: ListView(
+            padding: EdgeInsets.zero,
             children: [
-              if (view == TrainingView.overview) ...[
-                const SectionTitle('Heute', icon: Icons.today_outlined),
-                const SizedBox(height: 12),
-
-                if (calendarLoading)
-                  const Card(
-                    child: Padding(
-                      padding: EdgeInsets.all(20),
-                      child: Row(
-                        children: [
-                          SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                          SizedBox(width: 16),
-                          Text('Trainingsplan wird geladen …'),
-                        ],
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (view == TrainingView.overview) ...[
+                      SectionTitle(
+                        todaysWorkouts.isNotEmpty
+                            ? 'Heute'
+                            : 'Letztes Training',
+                        icon: todaysWorkouts.isNotEmpty
+                            ? Icons.today_outlined
+                            : Icons.history_outlined,
                       ),
-                    ),
-                  )
-                else if (calendarError != null)
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(20),
-                      child: Text(
-                        calendarError!,
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                      ),
-                    ),
-                  )
-                else if (todaysWorkouts.isEmpty)
-                  const Card(
-                    child: Padding(
-                      padding: EdgeInsets.all(20),
-                      child: Text('Heute ist kein Training geplant.'),
-                    ),
-                  )
-                else
-                  ...todaysWorkouts.map((scheduled) {
-                    final workout = scheduled.workout;
-                    final activity = scheduled.activity;
 
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(20),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                workout.name,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .headlineSmall,
-                              ),
+                      const SizedBox(height: 12),
 
-                              const SizedBox(height: 6),
-
-                              Text(
-                                '${workout.totalDuration.inMinutes} Minuten',
-                                style: Theme.of(context).textTheme.bodyMedium,
-                              ),
-
-                              if (workout.description.isNotEmpty) ...[
-                                const SizedBox(height: 8),
-                                Text(
-                                  workout.description,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.bodyMedium,
+                      if (calendarLoading)
+                        const Card(
+                          child: Padding(
+                            padding: EdgeInsets.all(20),
+                            child: Row(
+                              children: [
+                                SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
                                 ),
+                                SizedBox(width: 16),
+                                Text('Trainingsplan wird geladen …'),
                               ],
+                            ),
+                          ),
+                        )
+                      else if (calendarError != null)
+                        Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(20),
+                            child: Text(
+                              calendarError!,
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.error,
+                              ),
+                            ),
+                          ),
+                        )
+                      else if (todaysWorkouts.isNotEmpty)
+                        ...todaysWorkouts.map((scheduled) {
+                          final workout = scheduled.workout;
+                          final activity = scheduled.activity;
 
-                              const SizedBox(height: 18),
-
-                              if (scheduled.isCompleted) ...[
-                                Row(
-                                  children: [
-                                    Icon(
-                                      Icons.check_circle,
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .primary,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      'Training abgeschlossen',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleMedium,
-                                    ),
-                                  ],
-                                ),
-
-                                if (activity != null) ...[
-                                  const SizedBox(height: 12),
-
-                                  Wrap(
-                                    spacing: 16,
-                                    runSpacing: 8,
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: Card(
+                              clipBehavior: Clip.antiAlias,
+                              child: InkWell(
+                                onTap: () => onOpenWorkout(scheduled),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(20),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      if (activity.durationMinutes != null)
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              workout.name,
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .headlineSmall,
+                                            ),
+                                          ),
+                                          Icon(
+                                            Icons.chevron_right,
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .primary,
+                                          ),
+                                        ],
+                                      ),
+
+                                      const SizedBox(height: 6),
+
+                                      Text(
+                                        '${workout.totalDuration.inMinutes} Minuten',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodyMedium,
+                                      ),
+
+                                      if (workout.description.isNotEmpty) ...[
+                                        const SizedBox(height: 8),
                                         Text(
-                                          '${activity.durationMinutes!.toStringAsFixed(1)} Min.',
+                                          workout.description,
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodyMedium,
                                         ),
-                                      if (activity.distanceKm != null)
-                                        Text(
-                                          '${activity.distanceKm!.toStringAsFixed(2)} km',
+                                      ],
+
+                                      const SizedBox(height: 18),
+
+                                      if (scheduled.isCompleted) ...[
+                                        Row(
+                                          children: [
+                                            Icon(
+                                              Icons.check_circle,
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .primary,
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              'Training abgeschlossen',
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .titleMedium,
+                                            ),
+                                          ],
                                         ),
-                                      if (activity.averagePower != null)
-                                        Text(
-                                          'Ø ${activity.averagePower!.round()} W',
+
+                                        if (activity != null) ...[
+                                          const SizedBox(height: 12),
+                                          Wrap(
+                                            spacing: 16,
+                                            runSpacing: 8,
+                                            children: [
+                                              if (activity.durationMinutes !=
+                                                  null)
+                                                Text(
+                                                  '${activity.durationMinutes!.toStringAsFixed(1)} Min.',
+                                                ),
+                                              if (activity.distanceKm != null)
+                                                Text(
+                                                  '${activity.distanceKm!.toStringAsFixed(2)} km',
+                                                ),
+                                              if (activity.averagePower != null)
+                                                Text(
+                                                  'Ø ${activity.averagePower!.round()} W',
+                                                ),
+                                              if (activity.averageHr != null)
+                                                Text(
+                                                  'Ø HF ${activity.averageHr!.round()}',
+                                                ),
+                                            ],
+                                          ),
+                                        ],
+                                      ] else if (scheduled.isSkipped) ...[
+                                        Row(
+                                          children: [
+                                            Icon(
+                                              Icons.event_busy_outlined,
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .outline,
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              'Training entfällt',
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .titleMedium,
+                                            ),
+                                          ],
                                         ),
-                                      if (activity.averageHr != null)
+                                      ] else
                                         Text(
-                                          'Ø HF ${activity.averageHr!.round()}',
+                                          'Details ansehen',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .labelLarge
+                                              ?.copyWith(
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .primary,
+                                              ),
                                         ),
                                     ],
                                   ),
-                                ],
-                              ] else if (scheduled.isSkipped) ...[
-                                Row(
-                                  children: [
-                                    Icon(
-                                      Icons.event_busy_outlined,
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .outline,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      'Training entfällt',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleMedium,
-                                    ),
-                                  ],
                                 ),
-
-                                if (scheduled.planStatusReason != null) ...[
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    scheduled.planStatusReason!,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodyMedium,
-                                  ),
-                                ],
-                              ] else
-                                SizedBox(
-                                  width: double.infinity,
-                                  child: FilledButton.icon(
-                                    onPressed: () => onStartWorkout(workout),
-                                    icon: const Icon(Icons.play_arrow),
-                                    label: const Text('Training starten'),
-                                  ),
-                                ),
-                            ],
+                              ),
+                            ),
+                          );
+                        })
+                      else if (latestCompletedEntry != null)
+                        _LatestCompletedWorkoutCard(
+                          entry: latestCompletedEntry,
+                          endurainServer: endurainServer,
+                        )
+                      else
+                        const Card(
+                          child: Padding(
+                            padding: EdgeInsets.all(20),
+                            child: Text(
+                              'Noch kein abgeschlossenes Training vorhanden.',
+                            ),
                           ),
                         ),
+                    ],
+                    if (view == TrainingView.overview &&
+                        trainingPlanReview != null) ...[
+                      const SizedBox(height: 32),
+
+                      const SectionTitle(
+                        'Trainingscoach',
+                        icon: Icons.auto_awesome_outlined,
                       ),
-                    );
-                  }),
-              ],
-              if (view == TrainingView.overview &&
-                  trainingPlanReview != null) ...[
-                const SizedBox(height: 32),
 
-                const SectionTitle(
-                  'Trainingscoach',
-                  icon: Icons.auto_awesome_outlined,
-                ),
+                      const SizedBox(height: 12),
 
-                const SizedBox(height: 12),
-
-                _TrainingPlanReviewTile(
-                  review: trainingPlanReview!,
-                  onApply: onApplyTrainingPlanReview,
-                ),
-              ],
-              if (view == TrainingView.overview &&
-                  trainingPlanDraft != null) ...[
-                const SizedBox(height: 32),
-
-                const SectionTitle(
-                  'Neuer Trainingsplan',
-                  icon: Icons.auto_awesome_outlined,
-                ),
-
-                const SizedBox(height: 12),
-
-                _TrainingPlanDraftTile(
-                  draft: trainingPlanDraft!,
-                  onApply: onApplyTrainingPlan,
-                ),
-              ],
-              if (view == TrainingView.history &&
-                  trainingHistory.isNotEmpty) ...[
-                const SizedBox(height: 32),
-
-                const SectionTitle('Trainingshistorie', icon: Icons.history),
-
-                const SizedBox(height: 12),
-
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    for (var i = 0; i < trainingHistory.length; i++) ...[
-                      if (i == 0 ||
-                          trainingHistory[i].date.year !=
-                              trainingHistory[i - 1].date.year) ...[
-                        if (i > 0) const SizedBox(height: 16),
-
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
-                          child: Text(
-                            trainingHistory[i].date.year.toString(),
-                            style: Theme.of(context).textTheme.titleMedium
-                                ?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurfaceVariant,
-                                ),
-                          ),
-                        ),
-                      ],
-
-                      _TrainingHistoryTile(
-                        entry: trainingHistory[i],
-                        formattedDate: _formatHistoryDate(
-                          trainingHistory[i].date,
-                        ),
-                        endurainServer: endurainServer,
-                        onLink: trainingHistory[i].match == null
-                            ? null
-                            : () => onLinkWorkout(trainingHistory[i].match!),
+                      _TrainingPlanReviewTile(
+                        review: trainingPlanReview!,
+                        onApply: onApplyTrainingPlanReview,
                       ),
                     ],
-                  ],
-                ),
+                    if (view == TrainingView.overview &&
+                        trainingPlanDraft != null) ...[
+                      const SizedBox(height: 32),
 
-                if (historyHasMore) ...[
-                  const SizedBox(height: 8),
+                      const SectionTitle(
+                        'Neuer Trainingsplan',
+                        icon: Icons.auto_awesome_outlined,
+                      ),
 
-                  OutlinedButton.icon(
-                    onPressed: historyLoadingMore ? null : onLoadMoreHistory,
-                    icon: historyLoadingMore
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.expand_more),
-                    label: Text(
-                      historyLoadingMore
-                          ? 'Ältere Trainings werden gesucht …'
-                          : 'Ältere Trainings laden',
-                    ),
-                  ),
-                ],
-              ],
+                      const SizedBox(height: 12),
 
-              if (view == TrainingView.plan) ...[
-                const SizedBox(height: 32),
+                      _TrainingPlanDraftTile(
+                        draft: trainingPlanDraft!,
+                        onApply: onApplyTrainingPlan,
+                      ),
+                    ],
+                    if (view == TrainingView.history &&
+                        trainingHistory.isNotEmpty) ...[
+                      const SizedBox(height: 32),
 
-                const SectionTitle(
-                  'Trainingsplan',
-                  icon: Icons.calendar_month_outlined,
-                ),
+                      const SectionTitle(
+                        'Trainingshistorie',
+                        icon: Icons.history,
+                      ),
 
-                const SizedBox(height: 12),
+                      const SizedBox(height: 12),
 
-                if (upcomingWorkouts.isEmpty)
-                  const Card(
-                    child: Padding(
-                      padding: EdgeInsets.all(20),
-                      child: Text('Keine weiteren Trainings geplant.'),
-                    ),
-                  )
-                else
-                  for (final entry in workoutsByMonth.entries) ...[
-                    Text(
-                      _formatMonth(entry.key),
-                      style: Theme.of(context).textTheme.titleMedium
-                          ?.copyWith(fontWeight: FontWeight.w600),
-                    ),
-
-                    const SizedBox(height: 8),
-
-                    Card(
-                      clipBehavior: Clip.antiAlias,
-                      child: Column(
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          for (var i = 0; i < entry.value.length; i++) ...[
-                            _UpcomingWorkoutTile(
-                              scheduled: entry.value[i],
-                              formattedDate: _formatDate(entry.value[i].start),
-                              onTap: () => onOpenWorkout(entry.value[i]),
-                            ),
+                          for (var i = 0; i < trainingHistory.length; i++) ...[
+                            if (i == 0 ||
+                                trainingHistory[i].date.year !=
+                                    trainingHistory[i - 1].date.year) ...[
+                              if (i > 0) const SizedBox(height: 16),
 
-                            if (i < entry.value.length - 1)
-                              const Divider(
-                                height: 1,
-                                indent: 18,
-                                endIndent: 18,
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
+                                child: Text(
+                                  trainingHistory[i].date.year.toString(),
+                                  style: Theme.of(context).textTheme.titleMedium
+                                      ?.copyWith(
+                                        fontWeight: FontWeight.w600,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSurfaceVariant,
+                                      ),
+                                ),
                               ),
+                            ],
+
+                            _TrainingHistoryTile(
+                              entry: trainingHistory[i],
+                              formattedDate: _formatHistoryDate(
+                                trainingHistory[i].date,
+                              ),
+                              endurainServer: endurainServer,
+                              onLink: trainingHistory[i].match == null
+                                  ? null
+                                  : () => onLinkWorkout(
+                                      trainingHistory[i].match!,
+                                    ),
+                            ),
                           ],
                         ],
                       ),
-                    ),
 
-                    const SizedBox(height: 20),
+                      if (historyHasMore) ...[
+                        const SizedBox(height: 8),
+
+                        OutlinedButton.icon(
+                          onPressed: historyLoadingMore
+                              ? null
+                              : onLoadMoreHistory,
+                          icon: historyLoadingMore
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.expand_more),
+                          label: Text(
+                            historyLoadingMore
+                                ? 'Ältere Trainings werden gesucht …'
+                                : 'Ältere Trainings laden',
+                          ),
+                        ),
+                      ],
+                    ],
+
+                    if (view == TrainingView.plan) ...[
+                      const SizedBox(height: 32),
+
+                      const SectionTitle(
+                        'Trainingsplan',
+                        icon: Icons.calendar_month_outlined,
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      if (upcomingWorkouts.isEmpty)
+                        const Card(
+                          child: Padding(
+                            padding: EdgeInsets.all(20),
+                            child: Text('Keine weiteren Trainings geplant.'),
+                          ),
+                        )
+                      else
+                        for (final entry in workoutsByMonth.entries) ...[
+                          Text(
+                            _formatMonth(entry.key),
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w600),
+                          ),
+
+                          const SizedBox(height: 8),
+
+                          Card(
+                            clipBehavior: Clip.antiAlias,
+                            child: Column(
+                              children: [
+                                for (
+                                  var i = 0;
+                                  i < entry.value.length;
+                                  i++
+                                ) ...[
+                                  _UpcomingWorkoutTile(
+                                    scheduled: entry.value[i],
+                                    formattedDate: _formatDate(
+                                      entry.value[i].start,
+                                    ),
+                                    onTap: () => onOpenWorkout(entry.value[i]),
+                                  ),
+
+                                  if (i < entry.value.length - 1)
+                                    const Divider(
+                                      height: 1,
+                                      indent: 18,
+                                      endIndent: 18,
+                                    ),
+                                ],
+                              ],
+                            ),
+                          ),
+
+                          const SizedBox(height: 20),
+                        ],
+                    ],
                   ],
-              ],
+                ),
+              ),
             ],
           ),
         ),
@@ -1048,6 +1111,134 @@ class _TrainingHistoryTile extends StatelessWidget {
                 ],
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LatestCompletedWorkoutCard extends StatelessWidget {
+  final TrainingHistoryEntry entry;
+  final String endurainServer;
+
+  const _LatestCompletedWorkoutCard({
+    required this.entry,
+    required this.endurainServer,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final match = entry.match;
+    final activity = match?.linkedActivity;
+
+    if (match == null || activity == null) {
+      return const SizedBox.shrink();
+    }
+
+    final scheduled = match.scheduledWorkout;
+    final workout = scheduled.workout;
+
+    final date = scheduled.start;
+
+    final formattedDate =
+        '${date.day.toString().padLeft(2, '0')}.'
+        '${date.month.toString().padLeft(2, '0')}.'
+        '${date.year}';
+
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => RowingActivityDetailScreen(
+                activity: activity,
+                endurainServer: endurainServer,
+                analysis: entry.analysis,
+              ),
+            ),
+          );
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 46,
+                    height: 46,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primaryContainer,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(
+                      Icons.check_circle_outline,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+
+                  const SizedBox(width: 14),
+
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          workoutDisplayName(workout.name),
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          formattedDate,
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  Icon(
+                    Icons.chevron_right,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 16),
+
+              Wrap(
+                spacing: 16,
+                runSpacing: 8,
+                children: [
+                  Text('${(activity.duration / 60).toStringAsFixed(1)} Min.'),
+                  Text('${activity.distanceKm.toStringAsFixed(2)} km'),
+                  Text('Ø ${activity.averagePower.round()} W'),
+                  Text('Ø HF ${activity.averageHeartRate.round()}'),
+                ],
+              ),
+
+              if (entry.analysis != null) ...[
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.auto_awesome_outlined,
+                      size: 18,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Coach-Analyse verfügbar',
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ],
           ),
         ),
       ),

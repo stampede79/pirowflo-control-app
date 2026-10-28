@@ -33,6 +33,7 @@ import 'models/coach_overview.dart';
 import 'services/workout_service.dart';
 import 'models/workout_analysis.dart';
 import 'services/training_history_service.dart';
+import 'screens/control_screen.dart';
 
 void main() {
   runApp(const PiRowFloApp());
@@ -1010,10 +1011,6 @@ class _ControlPageState extends State<ControlPage> {
         builder: (_) => WorkoutDetailScreen(
           workout: scheduled.workout,
           scheduledDate: scheduled.start,
-          onStartWorkout: () {
-            Navigator.pop(context);
-            startWorkout(scheduled.workout);
-          },
         ),
       ),
     );
@@ -1271,6 +1268,74 @@ class _ControlPageState extends State<ControlPage> {
       setState(() {
         upcomingWorkouts = [];
       });
+    }
+  }
+
+  Future<void> startTrainingFromHome() async {
+    final availableToday = todaysWorkouts
+        .where(
+          (scheduled) =>
+              !scheduled.isCompleted &&
+              !scheduled.isSkipped &&
+              !scheduled.isMissed,
+        )
+        .toList();
+
+    if (availableToday.isEmpty) {
+      await startFreeWorkout();
+      return;
+    }
+
+    final scheduled = availableToday.first;
+
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Training starten',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Für heute ist „${scheduled.workout.name}“ geplant.',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 20),
+              FilledButton.icon(
+                onPressed: () => Navigator.pop(context, 'planned'),
+                icon: const Icon(Icons.event_available_outlined),
+                label: Text('${scheduled.workout.name} starten'),
+              ),
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: () => Navigator.pop(context, 'free'),
+                icon: const Icon(Icons.rowing),
+                label: const Text('Freies Training starten'),
+              ),
+              const SizedBox(height: 4),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Abbrechen'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (!mounted) return;
+
+    switch (choice) {
+      case 'planned':
+        await startWorkout(scheduled.workout);
+      case 'free':
+        await startFreeWorkout();
     }
   }
 
@@ -1631,8 +1696,7 @@ class _ControlPageState extends State<ControlPage> {
           calendarError: calendarError,
           todaysWorkouts: todaysWorkouts,
           nextWorkout: nextWorkout,
-          onStartWorkout: startWorkout,
-          onStartFreeWorkout: startFreeWorkout,
+          onStartTraining: startTrainingFromHome,
           onOpenWorkout: openWorkoutDetail,
         ),
 
@@ -1682,319 +1746,25 @@ class _ControlPageState extends State<ControlPage> {
           onPeriodChanged: changeRowingStatisticsPeriod,
           onRefresh: loadRowingStatistics,
         ),
-        4 => SafeArea(
-          // HIER bleibt dein bisheriger
-          // PiRowFlo-Steuerungs-Body,
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: !configured
-                ? Center(
-                    child: FilledButton.icon(
-                      onPressed: showSettings,
-                      icon: const Icon(Icons.settings),
-                      label: const Text('Verbindung einrichten'),
-                    ),
-                  )
-                : ListView(
-                    children: [
-                      Text(
-                        'Betriebsmodus',
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-
-                      const SizedBox(height: 12),
-
-                      Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(18),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 46,
-                                height: 46,
-                                decoration: BoxDecoration(
-                                  color: running
-                                      ? Theme.of(context)
-                                            .colorScheme
-                                            .primaryContainer
-                                      : Theme.of(context)
-                                            .colorScheme
-                                            .surfaceContainerHighest,
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                                child: Icon(
-                                  running
-                                      ? Icons.check_circle_outline
-                                      : Icons.power_settings_new,
-                                  color: running
-                                      ? Theme.of(context).colorScheme.primary
-                                      : Theme.of(context).colorScheme.outline,
-                                ),
-                              ),
-
-                              const SizedBox(width: 14),
-
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      running
-                                          ? activeMode
-                                          : 'Kein Betriebsmodus aktiv',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleMedium
-                                          ?.copyWith(
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                    ),
-
-                                    if (running) ...[
-                                      const SizedBox(height: 3),
-                                      Text(
-                                        'Aktiv',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodyMedium,
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-
-                      Text(
-                        'Systemstatus',
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-
-                      const SizedBox(height: 12),
-
-                      Card(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 18,
-                            vertical: 10,
-                          ),
-                          child: Column(
-                            children: [
-                              _SystemStatusRow(
-                                icon: Icons.rowing,
-                                title: 'SmartRow',
-                                status: smartRowReady
-                                    ? 'Verbunden'
-                                    : smartRowConnected
-                                    ? 'Verbindung wird vorbereitet'
-                                    : 'Nicht verbunden',
-                                healthy: smartRowReady,
-                              ),
-
-                              const Divider(height: 1),
-
-                              _SystemStatusRow(
-                                icon: Icons.bluetooth,
-                                title: 'Bluetooth',
-                                status: smartRowBluetoothStatusText,
-                                healthy: smartRowBluetoothHealthy,
-                                warning:
-                                    bluetoothRequired &&
-                                    !smartRowBluetoothHealthy,
-                              ),
-
-                              const Divider(height: 1),
-
-                              _SystemStatusRow(
-                                icon: Icons.watch,
-                                title: 'ANT+',
-                                status: antAvailable
-                                    ? 'Adapter erkannt'
-                                    : 'Adapter nicht gefunden',
-                                healthy: antAvailable,
-                                warning: antRequired && !antAvailable,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      if (error != null) ...[
-                        const SizedBox(height: 16),
-                        Card(
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Text(
-                              error!,
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.error,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: 24),
-
-                      if (states['combined'] != 'RUNNING') ...[
-                        FilledButton.icon(
-                          onPressed: loading || states['combined'] == 'RUNNING'
-                              ? null
-                              : () => post('/api/start/combined'),
-                          icon: Icon(
-                            states['combined'] == 'RUNNING'
-                                ? Icons.check_circle
-                                : Icons.bluetooth_connected,
-                          ),
-                          label: Text(
-                            states['combined'] == 'RUNNING'
-                                ? 'BLE + ANT+ aktiv'
-                                : 'BLE + ANT+ starten',
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                      ],
-
-                      if (states['combined'] != 'RUNNING') ...[
-                        FilledButton.tonalIcon(
-                          onPressed: loading || states['bluetooth'] == 'RUNNING'
-                              ? null
-                              : () => post('/api/start/bluetooth'),
-                          icon: Icon(
-                            states['bluetooth'] == 'RUNNING'
-                                ? Icons.check_circle
-                                : Icons.bluetooth,
-                          ),
-                          label: Text(
-                            states['bluetooth'] == 'RUNNING'
-                                ? 'Bluetooth aktiv'
-                                : 'Nur Bluetooth starten',
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                      ],
-
-                      if (states['combined'] != 'RUNNING') ...[
-                        FilledButton.tonalIcon(
-                          onPressed: loading || states['ant'] == 'RUNNING'
-                              ? null
-                              : () => post('/api/start/ant'),
-                          icon: Icon(
-                            states['ant'] == 'RUNNING'
-                                ? Icons.check_circle
-                                : Icons.watch,
-                          ),
-                          label: Text(
-                            states['ant'] == 'RUNNING'
-                                ? 'ANT+ aktiv'
-                                : 'Nur ANT+ starten',
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: 24),
-                      OutlinedButton.icon(
-                        onPressed: loading || !running
-                            ? null
-                            : () => post('/api/restart'),
-                        icon: const Icon(Icons.restart_alt),
-                        label: const Text('Neu starten'),
-                      ),
-                      const SizedBox(height: 12),
-
-                      OutlinedButton.icon(
-                        onPressed:
-                            loading || !smartRowConnected || !smartRowReady
-                            ? null
-                            : () => post('/api/reset'),
-                        icon: const Icon(Icons.refresh),
-                        label: const Text('Training zurücksetzen'),
-                      ),
-                      const SizedBox(height: 12),
-
-                      OutlinedButton.icon(
-                        onPressed: loading || !running
-                            ? null
-                            : () => post('/api/stop'),
-                        icon: const Icon(Icons.stop),
-                        label: const Text('Stoppen'),
-                      ),
-
-                      if (loading) ...[
-                        const SizedBox(height: 24),
-                        const Center(child: CircularProgressIndicator()),
-                      ],
-                    ],
-                  ),
-          ),
+        4 => ControlScreen(
+          configured: configured,
+          running: running,
+          activeMode: activeMode,
+          smartRowConnected: smartRowConnected,
+          smartRowReady: smartRowReady,
+          smartRowBluetoothStatusText: smartRowBluetoothStatusText,
+          smartRowBluetoothHealthy: smartRowBluetoothHealthy,
+          bluetoothRequired: bluetoothRequired,
+          antAvailable: antAvailable,
+          antRequired: antRequired,
+          loading: loading,
+          error: error,
+          states: states,
+          onSettings: showSettings,
+          onPost: post,
         ),
         _ => const SizedBox.shrink(),
       },
-    );
-  }
-}
-
-class _SystemStatusRow extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String status;
-  final bool healthy;
-  final bool warning;
-
-  const _SystemStatusRow({
-    required this.icon,
-    required this.title,
-    required this.status,
-    required this.healthy,
-    this.warning = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final color = warning
-        ? Theme.of(context).colorScheme.error
-        : healthy
-        ? Theme.of(context).colorScheme.primary
-        : Theme.of(context).colorScheme.outline;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 7),
-      child: Row(
-        children: [
-          Icon(
-            warning
-                ? Icons.warning_amber_rounded
-                : healthy
-                ? Icons.check_circle_outline
-                : Icons.radio_button_unchecked,
-            size: 22,
-            color: color,
-          ),
-          const SizedBox(width: 12),
-          Icon(
-            icon,
-            size: 20,
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              title,
-              style: Theme.of(context).textTheme.bodyLarge
-                  ?.copyWith(fontWeight: FontWeight.w600),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Flexible(
-            child: Text(
-              status,
-              textAlign: TextAlign.end,
-              style: Theme.of(context).textTheme.bodyMedium
-                  ?.copyWith(color: color),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
