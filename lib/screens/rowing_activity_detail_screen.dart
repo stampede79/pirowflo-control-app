@@ -2,20 +2,21 @@ import 'package:flutter/material.dart';
 
 import '../models/endurain_activity.dart';
 import '../models/endurain_stream.dart';
-import '../services/endurain_service.dart';
 import '../widgets/rowing_stream_chart.dart';
-import '../utils/user_friendly_error.dart';
 import '../models/workout_analysis.dart';
+import '../services/activity_stream_service.dart';
 
 class RowingActivityDetailScreen extends StatefulWidget {
   final EndurainActivity activity;
-  final String endurainServer;
+  final String server;
+  final String apiKey;
   final WorkoutAnalysis? analysis;
 
   const RowingActivityDetailScreen({
     super.key,
     required this.activity,
-    required this.endurainServer,
+    required this.server,
+    required this.apiKey,
     this.analysis,
   });
 
@@ -93,7 +94,10 @@ class _RowingActivityDetailScreenState
 
   Future<void> _loadStreams() async {
     try {
-      final service = EndurainService(server: widget.endurainServer);
+      final service = ActivityStreamService(
+        server: widget.server,
+        apiKey: widget.apiKey,
+      );
 
       final result = await service.getActivityStreams(widget.activity.id);
 
@@ -109,7 +113,7 @@ class _RowingActivityDetailScreenState
 
       setState(() {
         streamsLoading = false;
-        streamsError = UserFriendlyError.endurain(e);
+        streamsError = e.toString();
       });
     }
   }
@@ -142,6 +146,63 @@ class _RowingActivityDetailScreenState
     return result;
   }
 
+  double? get _cleanMaxPower {
+    final powerStream = _stream(EndurainStreamType.power);
+
+    if (powerStream == null || powerStream.points.isEmpty) {
+      return null;
+    }
+
+    final values = powerStream.points
+        .map((point) => point.value)
+        .where((value) => value > 0)
+        .toList();
+
+    if (values.isEmpty) {
+      return null;
+    }
+
+    return values.reduce((a, b) => a > b ? a : b);
+  }
+
+  double? get _cleanAverageCadence {
+    final cadenceStream = _stream(EndurainStreamType.cadence);
+
+    if (cadenceStream == null || cadenceStream.points.isEmpty) {
+      return null;
+    }
+
+    final values = cadenceStream.points
+        .map((point) => point.value)
+        .where((value) => value > 0)
+        .toList();
+
+    if (values.isEmpty) {
+      return null;
+    }
+
+    return values.reduce((a, b) => a + b) / values.length;
+  }
+
+  double? get _cleanMaxCadence {
+    final cadenceStream = _stream(EndurainStreamType.cadence);
+
+    if (cadenceStream == null || cadenceStream.points.isEmpty) {
+      return null;
+    }
+
+    final values = cadenceStream.points
+        .map((point) => point.value)
+        .where((value) => value > 0)
+        .toList();
+
+    if (values.isEmpty) {
+      return null;
+    }
+
+    return values.reduce((a, b) => a > b ? a : b);
+  }
+
   @override
   Widget build(BuildContext context) {
     final powerStream = _stream(EndurainStreamType.power);
@@ -149,6 +210,10 @@ class _RowingActivityDetailScreenState
 
     final heartRateStream = _stream(EndurainStreamType.heartRate);
     final streamStart = _streamStart;
+    final cleanAverageCadence = _cleanAverageCadence;
+
+    final cleanMaxCadence = _cleanMaxCadence;
+    final cleanMaxPower = _cleanMaxPower;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Rudertraining')),
@@ -197,9 +262,11 @@ class _RowingActivityDetailScreenState
                   label: 'Ø Leistung',
                   value: '${widget.activity.averagePower.round()} W',
                 ),
+
                 _ValueRow(
                   label: 'Max. Leistung',
-                  value: '${widget.activity.maxPower.round()} W',
+                  value:
+                      '${(cleanMaxPower ?? widget.activity.maxPower).round()} W',
                 ),
                 _ValueRow(
                   label: 'Normalized Power',
@@ -260,11 +327,13 @@ class _RowingActivityDetailScreenState
                 ),
                 _ValueRow(
                   label: 'Ø Schlagrate',
-                  value: '${widget.activity.averageCadence.round()} SPM',
+                  value:
+                      '${(cleanAverageCadence ?? widget.activity.averageCadence).round()} SPM',
                 ),
                 _ValueRow(
                   label: 'Max. Schlagrate',
-                  value: '${widget.activity.maxCadence.round()} SPM',
+                  value:
+                      '${(cleanMaxCadence ?? widget.activity.maxCadence).round()} SPM',
                 ),
                 _ValueRow(
                   label: 'Schläge',

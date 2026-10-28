@@ -26,6 +26,8 @@ class TrainingScreen extends StatefulWidget {
   final List<TrainingHistoryEntry> trainingHistory;
   final Future<void> Function(RecentWorkoutMatch) onLinkWorkout;
   final String endurainServer;
+  final String server;
+  final String apiKey;
   final bool historyLoadingMore;
   final Future<void> Function() onLoadMoreHistory;
   final bool historyHasMore;
@@ -47,6 +49,8 @@ class TrainingScreen extends StatefulWidget {
     required this.trainingHistory,
     required this.onLinkWorkout,
     required this.endurainServer,
+    required this.server,
+    required this.apiKey,
     required this.historyLoadingMore,
     required this.onLoadMoreHistory,
     required this.historyHasMore,
@@ -77,6 +81,8 @@ class _TrainingScreenState extends State<TrainingScreen> {
       trainingHistory: widget.trainingHistory,
       onLinkWorkout: widget.onLinkWorkout,
       endurainServer: widget.endurainServer,
+      server: widget.server,
+      apiKey: widget.apiKey,
       historyLoadingMore: widget.historyLoadingMore,
       onLoadMoreHistory: widget.onLoadMoreHistory,
       historyHasMore: widget.historyHasMore,
@@ -106,6 +112,8 @@ class _TrainingContent extends StatelessWidget {
   final List<TrainingHistoryEntry> trainingHistory;
   final Future<void> Function(RecentWorkoutMatch) onLinkWorkout;
   final String endurainServer;
+  final String server;
+  final String apiKey;
   final bool historyLoadingMore;
   final Future<void> Function() onLoadMoreHistory;
   final bool historyHasMore;
@@ -128,6 +136,8 @@ class _TrainingContent extends StatelessWidget {
     required this.trainingHistory,
     required this.onLinkWorkout,
     required this.endurainServer,
+    required this.server,
+    required this.apiKey,
     required this.historyLoadingMore,
     required this.onLoadMoreHistory,
     required this.historyHasMore,
@@ -429,7 +439,8 @@ class _TrainingContent extends StatelessWidget {
                       else if (latestCompletedEntry != null)
                         _LatestCompletedWorkoutCard(
                           entry: latestCompletedEntry,
-                          endurainServer: endurainServer,
+                          server: server,
+                          apiKey: apiKey,
                         )
                       else
                         const Card(
@@ -514,6 +525,8 @@ class _TrainingContent extends StatelessWidget {
                                 trainingHistory[i].date,
                               ),
                               endurainServer: endurainServer,
+                              server: server,
+                              apiKey: apiKey,
                               onLink: trainingHistory[i].match == null
                                   ? null
                                   : () => onLinkWorkout(
@@ -805,12 +818,16 @@ class _TrainingHistoryTile extends StatelessWidget {
   final TrainingHistoryEntry entry;
   final String formattedDate;
   final String endurainServer;
+  final String server;
+  final String apiKey;
   final Future<void> Function()? onLink;
 
   const _TrainingHistoryTile({
     required this.entry,
     required this.formattedDate,
     required this.endurainServer,
+    required this.server,
+    required this.apiKey,
     required this.onLink,
   });
 
@@ -1017,7 +1034,8 @@ class _TrainingHistoryTile extends StatelessWidget {
           MaterialPageRoute(
             builder: (_) => RowingActivityDetailScreen(
               activity: freeActivity,
-              endurainServer: endurainServer,
+              server: server,
+              apiKey: apiKey,
               analysis: entry.analysis,
             ),
           ),
@@ -1032,7 +1050,8 @@ class _TrainingHistoryTile extends StatelessWidget {
           MaterialPageRoute(
             builder: (_) => RowingActivityDetailScreen(
               activity: linkedActivity,
-              endurainServer: endurainServer,
+              server: server,
+              apiKey: apiKey,
               analysis: entry.analysis,
             ),
           ),
@@ -1120,11 +1139,13 @@ class _TrainingHistoryTile extends StatelessWidget {
 
 class _LatestCompletedWorkoutCard extends StatelessWidget {
   final TrainingHistoryEntry entry;
-  final String endurainServer;
+  final String server;
+  final String apiKey;
 
   const _LatestCompletedWorkoutCard({
     required this.entry,
-    required this.endurainServer,
+    required this.server,
+    required this.apiKey,
   });
 
   @override
@@ -1154,7 +1175,8 @@ class _LatestCompletedWorkoutCard extends StatelessWidget {
             MaterialPageRoute(
               builder: (_) => RowingActivityDetailScreen(
                 activity: activity,
-                endurainServer: endurainServer,
+                server: server,
+                apiKey: apiKey,
                 analysis: entry.analysis,
               ),
             ),

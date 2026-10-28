@@ -1715,6 +1715,8 @@ class _ControlPageState extends State<ControlPage> {
           calendarLoading: calendarLoading,
           calendarError: calendarError,
           endurainServer: endurainServerController.text.trim(),
+          server: serverController.text.trim(),
+          apiKey: apiKeyController.text.trim(),
           onStartWorkout: startWorkout,
           historyLoadingMore: historyLoadingMore,
           onLoadMoreHistory: loadMoreHistory,

@@ -8,7 +8,8 @@ class RowingActivitiesScreen extends StatelessWidget {
   final bool loading;
   final String? error;
   final VoidCallback onRefresh;
-  final String endurainServer;
+  final String server;
+  final String apiKey;
 
   const RowingActivitiesScreen({
     super.key,
@@ -16,7 +17,8 @@ class RowingActivitiesScreen extends StatelessWidget {
     required this.loading,
     required this.error,
     required this.onRefresh,
-    required this.endurainServer,
+    required this.server,
+    required this.apiKey,
   });
 
   String _formatDate(DateTime date) {
@@ -110,7 +112,8 @@ class RowingActivitiesScreen extends StatelessWidget {
                       activity: activities[i],
                       formatDate: _formatDate,
                       formatDuration: _formatDuration,
-                      endurainServer: endurainServer,
+                      server: server,
+                      apiKey: apiKey,
                     ),
                     if (i < activities.length - 1)
                       const Divider(height: 1, indent: 18, endIndent: 18),
@@ -133,13 +136,15 @@ class _ActivityTile extends StatelessWidget {
   final EndurainActivity activity;
   final String Function(DateTime) formatDate;
   final String Function(double) formatDuration;
-  final String endurainServer;
+  final String server;
+  final String apiKey;
 
   const _ActivityTile({
     required this.activity,
     required this.formatDate,
     required this.formatDuration,
-    required this.endurainServer,
+    required this.server,
+    required this.apiKey,
   });
 
   @override
@@ -150,7 +155,8 @@ class _ActivityTile extends StatelessWidget {
           MaterialPageRoute(
             builder: (_) => RowingActivityDetailScreen(
               activity: activity,
-              endurainServer: endurainServer,
+              server: server,
+              apiKey: apiKey,
             ),
           ),
         );
