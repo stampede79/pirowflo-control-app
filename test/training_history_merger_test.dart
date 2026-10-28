@@ -191,6 +191,43 @@ void main() {
       expect(result.first.activity, isNull);
     });
 
+    test('zeigt heutiges geplantes Training nicht in der Historie', () {
+      final scheduled = workout(
+        start: DateTime(2026, 10, 28),
+        status: 'planned',
+      );
+
+      final result = TrainingHistoryMerger.merge(
+        [scheduled],
+        [],
+        today: DateTime(2026, 10, 28),
+      );
+
+      expect(result, isEmpty);
+    });
+
+    test('zeigt heutiges abgeschlossenes Training in der Historie', () {
+      final scheduled = workout(
+        start: DateTime(2026, 10, 28),
+        linkedActivityId: 1115,
+        status: 'completed',
+      );
+
+      final linkedActivity = activity(
+        id: 1115,
+        start: DateTime(2026, 10, 28, 9, 30),
+      );
+
+      final result = TrainingHistoryMerger.merge(
+        [scheduled],
+        [linkedActivity],
+        today: DateTime(2026, 10, 28),
+      );
+
+      expect(result, hasLength(1));
+      expect(result.first.match?.status, RecentWorkoutMatchStatus.linked);
+    });
+
     test('missed Training beansprucht keine freie Aktivität', () {
       final missedWorkout = workout(
         start: DateTime(2026, 10, 16),
