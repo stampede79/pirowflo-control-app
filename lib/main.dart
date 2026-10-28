@@ -45,7 +45,7 @@ class PiRowFloApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'PiRowFlo Control',
+      title: 'PiRow Coach',
       debugShowCheckedModeBanner: false,
       theme: PiRowFloTheme.light,
       home: const ControlPage(),
@@ -1642,12 +1642,12 @@ class _ControlPageState extends State<ControlPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text(switch (selectedPage) {
-          0 => 'PiRowFlo Control',
+          0 => 'PiRow Coach',
           1 => 'Training',
           2 => 'Coach',
           3 => 'Statistiken',
-          4 => 'PiRowFlo-Steuerung',
-          _ => 'PiRowFlo Control',
+          4 => 'Steuerung',
+          _ => 'PiRow Coach',
         }),
         actions: [
           IconButton(

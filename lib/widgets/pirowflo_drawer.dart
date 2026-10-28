@@ -60,7 +60,7 @@ class PiRowFloDrawer extends StatelessWidget {
                             SizedBox(width: 10),
                             Expanded(
                               child: Text(
-                                'PiRowFlo Control',
+                                'PiRow Coach',
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontSize: 22,
@@ -118,7 +118,7 @@ class PiRowFloDrawer extends StatelessWidget {
                 _DrawerItem(
                   icon: Icons.tune_outlined,
                   selectedIcon: Icons.tune,
-                  title: 'PiRowFlo-Steuerung',
+                  title: 'Steuerung',
                   selected: selectedPage == 4,
                   onTap: () => onSelectPage(4),
                 ),

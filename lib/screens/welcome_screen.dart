@@ -37,7 +37,7 @@ class WelcomeScreen extends StatelessWidget {
                     const SizedBox(height: 28),
 
                     Text(
-                      'PiRowFlo Control',
+                      'PiRow Coach',
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.headlineMedium
                           ?.copyWith(fontWeight: FontWeight.w800),
