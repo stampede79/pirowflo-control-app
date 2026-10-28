@@ -6,6 +6,7 @@ class WorkoutPowerGauge extends StatelessWidget {
   final int? targetPowerMin;
   final int? targetPowerMax;
   final Color powerColor;
+  final double size;
 
   const WorkoutPowerGauge({
     super.key,
@@ -14,24 +15,37 @@ class WorkoutPowerGauge extends StatelessWidget {
     required this.powerColor,
     this.targetPowerMin,
     this.targetPowerMax,
+    this.size = 245,
   });
 
   @override
   Widget build(BuildContext context) {
     final hasTarget = targetPowerMin != null && targetPowerMax != null;
 
+    final scale = size / 245;
+
+    final ringSize = 225 * scale;
+    final innerSize = 180 * scale;
+    final strokeWidth = 14 * scale;
+
+    final powerStyle = Theme.of(context).textTheme.displayLarge?.copyWith(
+      fontWeight: FontWeight.w700,
+      fontSize: 57 * scale,
+      color: powerW > 0 ? powerColor : Theme.of(context).colorScheme.onSurface,
+    );
+
     return SizedBox(
-      width: 245,
-      height: 245,
+      width: size,
+      height: size,
       child: Stack(
         alignment: Alignment.center,
         children: [
           SizedBox(
-            width: 225,
-            height: 225,
+            width: ringSize,
+            height: ringSize,
             child: CircularProgressIndicator(
               value: progress.clamp(0.0, 1.0),
-              strokeWidth: 14,
+              strokeWidth: strokeWidth,
               strokeCap: StrokeCap.round,
               backgroundColor: Theme.of(context).colorScheme.primary
                   .withValues(alpha: 0.12),
@@ -42,15 +56,15 @@ class WorkoutPowerGauge extends StatelessWidget {
           ),
 
           Container(
-            width: 180,
-            height: 180,
+            width: innerSize,
+            height: innerSize,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: Theme.of(context).colorScheme.surface
                   .withValues(alpha: 0.92),
               boxShadow: [
                 BoxShadow(
-                  blurRadius: 24,
+                  blurRadius: 24 * scale,
                   color: Colors.black.withValues(alpha: 0.08),
                 ),
               ],
@@ -58,26 +72,21 @@ class WorkoutPowerGauge extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(
-                  powerW > 0 ? '$powerW' : '--',
-                  style: Theme.of(context).textTheme.displayLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: powerW > 0
-                        ? powerColor
-                        : Theme.of(context).colorScheme.onSurface,
-                  ),
-                ),
+                Text(powerW > 0 ? '$powerW' : '--', style: powerStyle),
                 Text(
                   'WATT',
                   style: Theme.of(context).textTheme.titleMedium
-                      ?.copyWith(letterSpacing: 1.5),
+                      ?.copyWith(fontSize: 16 * scale, letterSpacing: 1.5),
                 ),
 
                 if (hasTarget) ...[
-                  const SizedBox(height: 10),
+                  SizedBox(height: 10 * scale),
                   Text(
-                    'Ziel $targetPowerMin–$targetPowerMax W',
-                    style: Theme.of(context).textTheme.bodyMedium,
+                    'Ziel '
+                    '$targetPowerMin–'
+                    '$targetPowerMax W',
+                    style: Theme.of(context).textTheme.bodyMedium
+                        ?.copyWith(fontSize: 14 * scale),
                   ),
                 ],
               ],

@@ -16,7 +16,7 @@ plugins {
 
 android {
     namespace = "net.roderwieser.pirowflo_control"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 37
     ndkVersion = flutter.ndkVersion
 
     compileOptions {

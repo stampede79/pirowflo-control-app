@@ -11,6 +11,7 @@ import '../services/metrics_service.dart';
 import '../models/workout_step_result.dart';
 import '../services/workout_step_recorder.dart';
 import '../widgets/workout_power_gauge.dart';
+import '../services/heart_rate_service.dart';
 
 class WorkoutScreen extends StatefulWidget {
   final Workout workout;
@@ -36,6 +37,14 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
   RowingMetrics? metrics;
   String? metricsError;
+
+  final HeartRateService heartRateService = HeartRateService();
+
+  StreamSubscription<int>? heartRateSubscription;
+  StreamSubscription<String>? heartRateStatusSubscription;
+
+  int? heartRateBpm;
+  String heartRateStatus = 'HF-Sensor nicht verbunden';
 
   late WorkoutStepRecorder stepRecorder;
   final List<WorkoutStepResult> stepResults = [];
@@ -86,6 +95,26 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     return spm.toStringAsFixed(0);
   }
 
+  String? _tabletSpmTarget(WorkoutStep step) {
+    if (step.targetSpmMin == null || step.targetSpmMax == null) {
+      return null;
+    }
+
+    return 'Ziel '
+        '${step.targetSpmMin}–'
+        '${step.targetSpmMax} SPM';
+  }
+
+  String? _tabletPaceTarget(WorkoutStep step) {
+    if (!step.hasTargetPace) {
+      return null;
+    }
+
+    return 'Ziel '
+        '${formatPace(step.targetPaceMinSeconds!)}–'
+        '${formatPace(step.targetPaceMaxSeconds!)}';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -100,6 +129,24 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       const Duration(milliseconds: 500),
       (_) => loadMetrics(),
     );
+
+    heartRateSubscription = heartRateService.heartRate.listen((bpm) {
+      if (!mounted) return;
+
+      setState(() {
+        heartRateBpm = bpm;
+      });
+    });
+
+    heartRateStatusSubscription = heartRateService.status.listen((status) {
+      if (!mounted) return;
+
+      setState(() {
+        heartRateStatus = status;
+      });
+    });
+
+    heartRateService.start();
   }
 
   @override
@@ -110,6 +157,8 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     audioPlayer.dispose();
     WakelockPlus.disable();
     startCountdownTimer?.cancel();
+
+    heartRateService.dispose();
 
     super.dispose();
   }
@@ -812,6 +861,280 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     }
   }
 
+  Widget _buildTabletWorkout(
+    BuildContext context, {
+    required WorkoutStep step,
+    required double progress,
+    required WorkoutStep? upcomingStep,
+  }) {
+    final colors = Theme.of(context).colorScheme;
+    final hasMetrics = metrics != null && metrics!.smartRowReady;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.workout.name),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 24),
+            child: Center(child: liveStatus(context)),
+          ),
+        ],
+      ),
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          Image.asset(
+            'assets/images/rowing_background.png',
+            fit: BoxFit.cover,
+            alignment: Alignment.center,
+          ),
+
+          Container(color: const Color(0xFFF2F9FB).withValues(alpha: 0.92)),
+
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(32, 24, 32, 24),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              stepTypeLabel(step.type),
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(
+                                    color: colors.primary,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: 1.4,
+                                  ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              step.title,
+                              style: Theme.of(context).textTheme.headlineMedium
+                                  ?.copyWith(fontWeight: FontWeight.w700),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      if (!widget.workout.isFree)
+                        Text(
+                          'Abschnitt '
+                          '${currentStepIndex + 1} / '
+                          '${widget.workout.steps.length}',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        )
+                      else
+                        Text(
+                          'Freies Training',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  Expanded(
+                    child: Column(
+                      children: [
+                        Expanded(
+                          child: Center(
+                            child: Stack(
+                              clipBehavior: Clip.none,
+                              children: [
+                                WorkoutPowerGauge(
+                                  size: 360,
+                                  progress: progress,
+                                  powerW: hasMetrics ? metrics!.powerW : 0,
+                                  targetPowerMin: step.targetPowerMin,
+                                  targetPowerMax: step.targetPowerMax,
+                                  powerColor: hasMetrics
+                                      ? powerColor(context, step, metrics!)
+                                      : colors.primary,
+                                ),
+
+                                Positioned(
+                                  right: -8,
+                                  bottom: -8,
+                                  child: IconButton.filledTonal(
+                                    onPressed: hasMetrics
+                                        ? resetSmartRow
+                                        : null,
+                                    tooltip: 'SmartRow zurücksetzen',
+                                    icon: const Icon(Icons.refresh),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 12),
+
+                        Text(
+                          formatDuration(remaining),
+                          style: Theme.of(context).textTheme.displayMedium
+                              ?.copyWith(fontWeight: FontWeight.w800),
+                        ),
+
+                        Text(
+                          widget.workout.isFree
+                              ? 'Trainingszeit'
+                              : 'verbleibend',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+
+                        const SizedBox(height: 20),
+
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _TabletLiveMetric(
+                                icon: Icons.speed,
+                                value: hasMetrics && metrics!.strokeRateSpm > 0
+                                    ? metrics!.strokeRateSpm.toStringAsFixed(0)
+                                    : '--',
+                                label: 'SPM',
+                                target: _tabletSpmTarget(step),
+                              ),
+                            ),
+
+                            const SizedBox(width: 16),
+
+                            Expanded(
+                              child: _TabletLiveMetric(
+                                icon: Icons.timer_outlined,
+                                value: hasMetrics
+                                    ? livePace(metrics!.pace500mSeconds)
+                                    : '--:--',
+                                label: '/500 m',
+                                target: _tabletPaceTarget(step),
+                              ),
+                            ),
+
+                            const SizedBox(width: 16),
+
+                            Expanded(
+                              child: _TabletLiveMetric(
+                                icon: Icons.straighten,
+                                value: hasMetrics
+                                    ? '${metrics!.distanceM}'
+                                    : '--',
+                                label: 'Meter',
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 12),
+
+                        _TabletHeartRateMetric(
+                          bpm: heartRateBpm,
+                          status: heartRateStatus,
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  if (upcomingStep != null) ...[
+                    const SizedBox(height: 12),
+
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 14,
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.skip_next_outlined,
+                              color: colors.primary,
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              'Danach:',
+                              style: Theme.of(context).textTheme.labelLarge,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                '${upcomingStep.title} · '
+                                '${formatDuration(upcomingStep.duration)}',
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+
+                  const SizedBox(height: 16),
+
+                  Row(
+                    children: [
+                      Expanded(
+                        flex: 2,
+                        child: FilledButton.icon(
+                          onPressed: startingWorkout
+                              ? null
+                              : running
+                              ? pause
+                              : start,
+                          icon: Icon(running ? Icons.pause : Icons.play_arrow),
+                          label: Text(
+                            startingWorkout
+                                ? 'Training startet …'
+                                : running
+                                ? 'Pause'
+                                : workoutStarted
+                                ? 'Fortsetzen'
+                                : 'Training starten',
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(width: 16),
+
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: widget.workout.isFree
+                              ? startingWorkout || !workoutStarted
+                                    ? null
+                                    : finishFreeWorkout
+                              : startingWorkout
+                              ? null
+                              : () => nextStep(),
+                          icon: Icon(
+                            widget.workout.isFree
+                                ? Icons.stop_circle_outlined
+                                : Icons.skip_next,
+                          ),
+                          label: Text(
+                            widget.workout.isFree
+                                ? 'Training beenden'
+                                : 'Abschnitt überspringen',
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          if (showStepPreview) stepPreviewOverlay(context),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final step = currentStep;
@@ -823,6 +1146,18 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     final upcomingStep = currentStepIndex < widget.workout.steps.length - 1
         ? widget.workout.steps[currentStepIndex + 1]
         : null;
+
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final isTablet = screenWidth >= 700;
+
+    if (isTablet && !finished) {
+      return _buildTabletWorkout(
+        context,
+        step: step,
+        progress: progress,
+        upcomingStep: upcomingStep,
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -1118,6 +1453,61 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   }
 }
 
+class _TabletLiveMetric extends StatelessWidget {
+  final IconData icon;
+  final String value;
+  final String label;
+  final String? target;
+
+  const _TabletLiveMetric({
+    required this.icon,
+    required this.value,
+    required this.label,
+    this.target,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
+        child: Column(
+          children: [
+            Icon(icon, size: 28, color: colors.primary),
+
+            const SizedBox(height: 8),
+
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                value,
+                style: Theme.of(context).textTheme.displaySmall
+                    ?.copyWith(fontWeight: FontWeight.w800),
+              ),
+            ),
+
+            const SizedBox(height: 2),
+
+            Text(label, style: Theme.of(context).textTheme.titleMedium),
+
+            if (target != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                target!,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyMedium
+                    ?.copyWith(color: colors.onSurfaceVariant),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _ResultMetric extends StatelessWidget {
   final IconData icon;
   final String value;
@@ -1149,6 +1539,60 @@ class _ResultMetric extends StatelessWidget {
               label,
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TabletHeartRateMetric extends StatelessWidget {
+  final int? bpm;
+  final String status;
+
+  const _TabletHeartRateMetric({required this.bpm, required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final connected = bpm != null;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              connected ? Icons.favorite : Icons.favorite_outline,
+              size: 32,
+              color: connected ? colors.primary : colors.outline,
+            ),
+
+            const SizedBox(width: 16),
+
+            Text(
+              bpm?.toString() ?? '--',
+              style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                fontWeight: FontWeight.w800,
+                color: connected ? null : colors.outline,
+              ),
+            ),
+
+            const SizedBox(width: 8),
+
+            Text('bpm', style: Theme.of(context).textTheme.titleMedium),
+
+            const SizedBox(width: 20),
+
+            Flexible(
+              child: Text(
+                connected ? 'Herzfrequenz' : status,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodyMedium
+                    ?.copyWith(color: colors.onSurfaceVariant),
+              ),
             ),
           ],
         ),

@@ -5,12 +5,14 @@ class PiRowFloDrawer extends StatelessWidget {
   final int selectedPage;
   final ValueChanged<int> onSelectPage;
   final VoidCallback onSettings;
+  final VoidCallback onHeartRateTest;
 
   const PiRowFloDrawer({
     super.key,
     required this.selectedPage,
     required this.onSelectPage,
     required this.onSettings,
+    required this.onHeartRateTest,
   });
 
   Future<PackageInfo> _packageInfo() {
@@ -121,6 +123,13 @@ class PiRowFloDrawer extends StatelessWidget {
                   title: 'Steuerung',
                   selected: selectedPage == 4,
                   onTap: () => onSelectPage(4),
+                ),
+                _DrawerItem(
+                  icon: Icons.favorite_outline,
+                  selectedIcon: Icons.favorite,
+                  title: 'HF-Sensor testen',
+                  selected: false,
+                  onTap: onHeartRateTest,
                 ),
 
                 const Padding(
