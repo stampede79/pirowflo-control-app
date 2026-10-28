@@ -35,6 +35,7 @@ import 'models/workout_analysis.dart';
 import 'services/training_history_service.dart';
 import 'screens/control_screen.dart';
 import 'screens/heart_rate_test_screen.dart';
+import 'workouts/sample_workouts.dart';
 
 void main() {
   runApp(const PiRowFloApp());
@@ -1692,6 +1693,11 @@ class _ControlPageState extends State<ControlPage> {
           Navigator.of(context).push(
             MaterialPageRoute(builder: (_) => const HeartRateTestScreen()),
           );
+        },
+        onTestWorkout: () {
+          Navigator.pop(context);
+
+          startWorkout(buildShortIntervalTestWorkout());
         },
       ),
       body: switch (selectedPage) {

@@ -7,12 +7,15 @@ class PiRowFloDrawer extends StatelessWidget {
   final VoidCallback onSettings;
   final VoidCallback onHeartRateTest;
 
+  final VoidCallback onTestWorkout;
+
   const PiRowFloDrawer({
     super.key,
     required this.selectedPage,
     required this.onSelectPage,
     required this.onSettings,
     required this.onHeartRateTest,
+    required this.onTestWorkout,
   });
 
   Future<PackageInfo> _packageInfo() {
@@ -130,6 +133,13 @@ class PiRowFloDrawer extends StatelessWidget {
                   title: 'HF-Sensor testen',
                   selected: false,
                   onTap: onHeartRateTest,
+                ),
+                _DrawerItem(
+                  icon: Icons.science_outlined,
+                  selectedIcon: Icons.science,
+                  title: 'Testtraining',
+                  selected: false,
+                  onTap: onTestWorkout,
                 ),
 
                 const Padding(

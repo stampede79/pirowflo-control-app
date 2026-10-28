@@ -14,7 +14,7 @@ class HeartRateTestScreen extends StatefulWidget {
 class _HeartRateTestScreenState extends State<HeartRateTestScreen> {
   final HeartRateService _service = HeartRateService();
 
-  StreamSubscription<int>? _heartRateSubscription;
+  StreamSubscription<int?>? _heartRateSubscription;
   StreamSubscription<String>? _statusSubscription;
 
   int? _heartRate;

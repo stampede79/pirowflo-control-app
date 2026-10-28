@@ -40,7 +40,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
   final HeartRateService heartRateService = HeartRateService();
 
-  StreamSubscription<int>? heartRateSubscription;
+  StreamSubscription<int?>? heartRateSubscription;
   StreamSubscription<String>? heartRateStatusSubscription;
 
   int? heartRateBpm;
@@ -921,14 +921,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                         ),
                       ),
 
-                      if (!widget.workout.isFree)
-                        Text(
-                          'Abschnitt '
-                          '${currentStepIndex + 1} / '
-                          '${widget.workout.steps.length}',
-                          style: Theme.of(context).textTheme.titleMedium,
-                        )
-                      else
+                      if (widget.workout.isFree)
                         Text(
                           'Freies Training',
                           style: Theme.of(context).textTheme.titleMedium,
@@ -942,50 +935,89 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                     child: Column(
                       children: [
                         Expanded(
-                          child: Center(
-                            child: Stack(
-                              clipBehavior: Clip.none,
-                              children: [
-                                WorkoutPowerGauge(
-                                  size: 360,
-                                  progress: progress,
-                                  powerW: hasMetrics ? metrics!.powerW : 0,
-                                  targetPowerMin: step.targetPowerMin,
-                                  targetPowerMax: step.targetPowerMax,
-                                  powerColor: hasMetrics
-                                      ? powerColor(context, step, metrics!)
-                                      : colors.primary,
-                                ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  children: [
+                                    Expanded(
+                                      child: Center(
+                                        child: Stack(
+                                          clipBehavior: Clip.none,
+                                          children: [
+                                            WorkoutPowerGauge(
+                                              size: 360,
+                                              progress: progress,
+                                              powerW: hasMetrics
+                                                  ? metrics!.powerW
+                                                  : 0,
+                                              targetPowerMin:
+                                                  step.targetPowerMin,
+                                              targetPowerMax:
+                                                  step.targetPowerMax,
+                                              powerColor: hasMetrics
+                                                  ? powerColor(
+                                                      context,
+                                                      step,
+                                                      metrics!,
+                                                    )
+                                                  : colors.primary,
+                                            ),
 
-                                Positioned(
-                                  right: -8,
-                                  bottom: -8,
-                                  child: IconButton.filledTonal(
-                                    onPressed: hasMetrics
-                                        ? resetSmartRow
-                                        : null,
-                                    tooltip: 'SmartRow zurücksetzen',
-                                    icon: const Icon(Icons.refresh),
+                                            Positioned(
+                                              right: -8,
+                                              bottom: -8,
+                                              child: IconButton.filledTonal(
+                                                onPressed: hasMetrics
+                                                    ? resetSmartRow
+                                                    : null,
+                                                tooltip:
+                                                    'SmartRow zurücksetzen',
+                                                icon: const Icon(Icons.refresh),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+
+                                    const SizedBox(height: 12),
+
+                                    Text(
+                                      formatDuration(remaining),
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .displayMedium
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                    ),
+
+                                    Text(
+                                      widget.workout.isFree
+                                          ? 'Trainingszeit'
+                                          : 'verbleibend',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleMedium,
+                                    ),
+                                  ],
+                                ),
+                              ),
+
+                              if (!widget.workout.isFree) ...[
+                                const SizedBox(width: 20),
+
+                                SizedBox(
+                                  width: 220,
+                                  child: _WorkoutTimeline(
+                                    steps: widget.workout.steps,
+                                    currentStepIndex: currentStepIndex,
                                   ),
                                 ),
                               ],
-                            ),
+                            ],
                           ),
-                        ),
-
-                        const SizedBox(height: 12),
-
-                        Text(
-                          formatDuration(remaining),
-                          style: Theme.of(context).textTheme.displayMedium
-                              ?.copyWith(fontWeight: FontWeight.w800),
-                        ),
-
-                        Text(
-                          widget.workout.isFree
-                              ? 'Trainingszeit'
-                              : 'verbleibend',
-                          style: Theme.of(context).textTheme.titleMedium,
                         ),
 
                         const SizedBox(height: 20),
@@ -1039,40 +1071,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                       ],
                     ),
                   ),
-
-                  if (upcomingStep != null) ...[
-                    const SizedBox(height: 12),
-
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 14,
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.skip_next_outlined,
-                              color: colors.primary,
-                            ),
-                            const SizedBox(width: 12),
-                            Text(
-                              'Danach:',
-                              style: Theme.of(context).textTheme.labelLarge,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                '${upcomingStep.title} · '
-                                '${formatDuration(upcomingStep.duration)}',
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
 
                   const SizedBox(height: 16),
 
@@ -1543,6 +1541,168 @@ class _ResultMetric extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _WorkoutTimeline extends StatelessWidget {
+  final List<WorkoutStep> steps;
+  final int currentStepIndex;
+
+  const _WorkoutTimeline({required this.steps, required this.currentStepIndex});
+
+  int _workNumberFor(int stepIndex) {
+    var number = 0;
+
+    for (var index = 0; index <= stepIndex; index++) {
+      if (steps[index].type == WorkoutStepType.work) {
+        number++;
+      }
+    }
+
+    return number;
+  }
+
+  int get _workStepCount =>
+      steps.where((step) => step.type == WorkoutStepType.work).length;
+
+  String _labelFor(int index) {
+    final step = steps[index];
+
+    return switch (step.type) {
+      WorkoutStepType.warmup => 'Einrudern',
+      WorkoutStepType.cooldown => 'Ausrudern',
+      WorkoutStepType.recovery => 'Erholung',
+      WorkoutStepType.work =>
+        _workStepCount > 1 ? 'Belastung ${_workNumberFor(index)}' : 'Hauptteil',
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Trainingsverlauf',
+            style: Theme.of(context).textTheme.titleMedium
+                ?.copyWith(fontWeight: FontWeight.w700),
+          ),
+
+          const SizedBox(height: 6),
+
+          Expanded(
+            child: Column(
+              children: [
+                for (var index = 0; index < steps.length; index++)
+                  Expanded(
+                    child: _WorkoutTimelineStep(
+                      label: _labelFor(index),
+                      completed: index < currentStepIndex,
+                      current: index == currentStepIndex,
+                      showLine: index < steps.length - 1,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WorkoutTimelineStep extends StatelessWidget {
+  final String label;
+  final bool completed;
+  final bool current;
+  final bool showLine;
+
+  const _WorkoutTimelineStep({
+    required this.label,
+    required this.completed,
+    required this.current,
+    required this.showLine,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    final markerColor = current
+        ? colors.primary
+        : completed
+        ? colors.outline
+        : colors.outlineVariant;
+
+    final textColor = completed
+        ? colors.onSurfaceVariant.withValues(alpha: 0.55)
+        : colors.onSurface;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(
+          width: 22,
+          child: Column(
+            children: [
+              Container(
+                width: current ? 18 : 14,
+                height: current ? 18 : 14,
+                decoration: BoxDecoration(
+                  color: current
+                      ? colors.primary
+                      : completed
+                      ? colors.surfaceContainerHighest
+                      : colors.surface,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: markerColor,
+                    width: current ? 3 : 2,
+                  ),
+                ),
+                child: completed
+                    ? Icon(Icons.check, size: 10, color: colors.outline)
+                    : current
+                    ? Icon(Icons.play_arrow, size: 12, color: colors.onPrimary)
+                    : null,
+              ),
+
+              if (showLine)
+                Expanded(
+                  child: Container(
+                    width: 2,
+                    color: completed
+                        ? colors.outlineVariant
+                        : colors.surfaceContainerHighest,
+                  ),
+                ),
+            ],
+          ),
+        ),
+
+        const SizedBox(width: 5),
+
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: textColor,
+                  fontWeight: current ? FontWeight.w700 : FontWeight.w500,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

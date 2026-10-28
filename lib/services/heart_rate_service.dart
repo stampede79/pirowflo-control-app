@@ -18,17 +18,22 @@ class HeartRateService {
   StreamSubscription<ConnectionStateUpdate>? _connectionSubscription;
   StreamSubscription<List<int>>? _heartRateSubscription;
 
-  final StreamController<int> _heartRateController =
-      StreamController<int>.broadcast();
+  final StreamController<int?> _heartRateController =
+      StreamController<int?>.broadcast();
 
   final StreamController<String> _statusController =
       StreamController<String>.broadcast();
 
-  Stream<int> get heartRate => _heartRateController.stream;
+  Stream<int?> get heartRate => _heartRateController.stream;
 
   Stream<String> get status => _statusController.stream;
 
   String? _deviceId;
+
+  Timer? _staleTimer;
+  Timer? _reconnectTimer;
+
+  bool _stopping = false;
 
   Future<bool> requestPermissions() async {
     final statuses = await [
@@ -40,8 +45,14 @@ class HeartRateService {
   }
 
   Future<void> start() async {
-    await stop();
+    _stopping = false;
 
+    await stop(keepStoppingState: false);
+
+    await _startScan();
+  }
+
+  Future<void> _startScan() async {
     final permitted = await requestPermissions();
 
     if (!permitted) {
@@ -50,6 +61,8 @@ class HeartRateService {
     }
 
     _statusController.add('Suche Herzfrequenzsensor …');
+
+    await _scanSubscription?.cancel();
 
     _scanSubscription = _ble
         .scanForDevices(
@@ -113,17 +126,52 @@ class HeartRateService {
 
               case DeviceConnectionState.disconnected:
                 _statusController.add('HF-Sensor getrennt');
+
+                _heartRateController.add(null);
+
+                _staleTimer?.cancel();
                 _deviceId = null;
+
+                _scheduleReconnect();
             }
           },
           onError: (Object error) {
             _statusController.add('BLE-Verbindung fehlgeschlagen: $error');
+
+            _heartRateController.add(null);
+            _staleTimer?.cancel();
             _deviceId = null;
+
+            _scheduleReconnect();
           },
         );
   }
 
-  void _subscribeToHeartRate(String deviceId) {
+  void _scheduleReconnect() {
+    if (_stopping) {
+      return;
+    }
+
+    _reconnectTimer?.cancel();
+
+    _reconnectTimer = Timer(const Duration(seconds: 2), () async {
+      if (_stopping || _deviceId != null) {
+        return;
+      }
+
+      await _connectionSubscription?.cancel();
+      _connectionSubscription = null;
+
+      await _heartRateSubscription?.cancel();
+      _heartRateSubscription = null;
+
+      await _startScan();
+    });
+  }
+
+  Future<void> _subscribeToHeartRate(String deviceId) async {
+    await _heartRateSubscription?.cancel();
+    _heartRateSubscription = null;
     final characteristic = QualifiedCharacteristic(
       serviceId: _heartRateService,
       characteristicId: _heartRateMeasurement,
@@ -138,10 +186,17 @@ class HeartRateService {
 
             if (bpm != null) {
               _heartRateController.add(bpm);
+              _restartStaleTimer();
             }
           },
           onError: (Object error) {
             _statusController.add('HF-Datenfehler: $error');
+
+            _heartRateController.add(null);
+            _staleTimer?.cancel();
+            _deviceId = null;
+
+            _scheduleReconnect();
           },
         );
   }
@@ -166,7 +221,30 @@ class HeartRateService {
     return data[1] | (data[2] << 8);
   }
 
-  Future<void> stop() async {
+  void _restartStaleTimer() {
+    _staleTimer?.cancel();
+
+    _staleTimer = Timer(const Duration(seconds: 5), () {
+      if (_stopping) {
+        return;
+      }
+
+      _heartRateController.add(null);
+
+      _statusController.add('Keine aktuellen HF-Daten');
+
+      _deviceId = null;
+
+      _scheduleReconnect();
+    });
+  }
+
+  Future<void> stop({bool keepStoppingState = true}) async {
+    _stopping = keepStoppingState;
+
+    _staleTimer?.cancel();
+    _reconnectTimer?.cancel();
+
     await _scanSubscription?.cancel();
     await _heartRateSubscription?.cancel();
     await _connectionSubscription?.cancel();
@@ -176,6 +254,10 @@ class HeartRateService {
     _connectionSubscription = null;
 
     _deviceId = null;
+
+    if (keepStoppingState) {
+      _heartRateController.add(null);
+    }
   }
 
   Future<void> dispose() async {
