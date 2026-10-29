@@ -42,7 +42,7 @@ class WorkoutService {
     return workouts;
   }
 
-  Future<List<ApiWorkout>> getWorkouts({
+  Future<Map<String, dynamic>> getWorkoutsRaw({
     required DateTime start,
     required DateTime end,
   }) async {
@@ -67,7 +67,14 @@ class WorkoutService {
       );
     }
 
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  Future<List<ApiWorkout>> getWorkouts({
+    required DateTime start,
+    required DateTime end,
+  }) async {
+    final data = await getWorkoutsRaw(start: start, end: end);
 
     final rows = data['workouts'] as List<dynamic>? ?? const [];
 

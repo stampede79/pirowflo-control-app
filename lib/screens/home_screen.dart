@@ -19,6 +19,8 @@ class HomeScreen extends StatelessWidget {
   final ScheduledWorkout? nextWorkout;
   final void Function(ScheduledWorkout) onOpenWorkout;
   final VoidCallback onStartTraining;
+  final bool usingWorkoutCache;
+  final DateTime? workoutCacheTimestamp;
 
   const HomeScreen({
     super.key,
@@ -32,6 +34,8 @@ class HomeScreen extends StatelessWidget {
     required this.onStartTraining,
     required this.nextWorkout,
     required this.onOpenWorkout,
+    required this.usingWorkoutCache,
+    required this.workoutCacheTimestamp,
   });
 
   String _formatDate(DateTime date) {
@@ -42,6 +46,34 @@ class HomeScreen extends StatelessWidget {
     return '$weekday, '
         '${date.day.toString().padLeft(2, '0')}.'
         '${date.month.toString().padLeft(2, '0')}.';
+  }
+
+  String _formatRelativeDate(DateTime date) {
+    final now = DateTime.now();
+
+    final today = DateTime(now.year, now.month, now.day);
+
+    final target = DateTime(date.year, date.month, date.day);
+
+    final days = target.difference(today).inDays;
+
+    if (days == 1) {
+      return 'Morgen';
+    }
+
+    if (days == 2) {
+      return 'Übermorgen';
+    }
+
+    if (days > 2 && days <= 7) {
+      return 'In $days Tagen';
+    }
+
+    if (days > 7) {
+      return 'In $days Tagen · ${_formatDate(date)}';
+    }
+
+    return _formatDate(date);
   }
 
   @override
@@ -80,6 +112,31 @@ class HomeScreen extends StatelessWidget {
 
               const SizedBox(height: 12),
 
+              if (usingWorkoutCache && workoutCacheTimestamp != null) ...[
+                Row(
+                  children: [
+                    Icon(
+                      Icons.cloud_off_outlined,
+                      size: 16,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'Offline · Trainingsplan zuletzt '
+                        'aktualisiert um '
+                        '${workoutCacheTimestamp!.hour.toString().padLeft(2, '0')}:'
+                        '${workoutCacheTimestamp!.minute.toString().padLeft(2, '0')} Uhr',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+              ],
+
               if (calendarLoading)
                 const Card(
                   child: Padding(
@@ -101,11 +158,13 @@ class HomeScreen extends StatelessWidget {
                 Card(
                   child: Padding(
                     padding: const EdgeInsets.all(20),
-                    child: Text(
-                      calendarError!,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
-                      ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.cloud_off_outlined),
+                        const SizedBox(width: 12),
+                        Expanded(child: Text(calendarError!)),
+                      ],
                     ),
                   ),
                 )
@@ -341,7 +400,7 @@ class HomeScreen extends StatelessWidget {
                                 const SizedBox(height: 4),
 
                                 Text(
-                                  '${_formatDate(nextWorkout!.start)} · '
+                                  '${_formatRelativeDate(nextWorkout!.start)} · '
                                   '${nextWorkout!.workout.totalDuration.inMinutes} Min.',
                                   style: Theme.of(context).textTheme.bodyMedium,
                                 ),

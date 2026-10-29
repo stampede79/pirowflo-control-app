@@ -42,6 +42,7 @@ dependencies:
   package_info_plus: ^10.2.2
   flutter_reactive_ble: ^5.6.0
   permission_handler: ^13.0.2
+  path_provider: ^2.1.6
 
 dev_dependencies:
   flutter_test:
@@ -72,11 +73,13 @@ flutter:
   #   - images/a_dot_ham.jpeg
 
   assets:
-    - assets/sounds/countdown.wav
-    - assets/sounds/work.wav
-    - assets/sounds/recovery.wav
-    - assets/sounds/finished.wav
-    - assets/images/rowing_background.png
+      - assets/sounds/countdown.wav
+      - assets/sounds/work.wav
+      - assets/sounds/recovery.wav
+      - assets/sounds/finished.wav
+      - assets/images/rowing_background.png
+      - assets/icon/pirow_coach.png
+
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
 

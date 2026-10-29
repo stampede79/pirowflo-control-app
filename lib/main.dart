@@ -19,7 +19,6 @@ import 'services/endurain_service.dart';
 import 'models/endurain_summary.dart';
 import 'models/endurain_activity.dart';
 import 'screens/rowing_statistics_screen.dart';
-import 'screens/welcome_screen.dart';
 import 'utils/user_friendly_error.dart';
 import 'models/recent_workout_match.dart';
 import 'services/recent_workout_matcher.dart';
@@ -36,6 +35,7 @@ import 'services/training_history_service.dart';
 import 'screens/control_screen.dart';
 import 'screens/heart_rate_test_screen.dart';
 import 'workouts/sample_workouts.dart';
+import 'services/workout_cache_service.dart';
 
 void main() {
   runApp(const PiRowFloApp());
@@ -102,6 +102,9 @@ class _ControlPageState extends State<ControlPage> {
 
   String? calendarTestResult;
   int selectedPage = 0;
+
+  bool usingWorkoutCache = false;
+  DateTime? workoutCacheTimestamp;
 
   bool loading = false;
   bool configured = false;
@@ -334,7 +337,7 @@ class _ControlPageState extends State<ControlPage> {
 
       setState(() {
         trainingPlanDraft = null;
-        trainingPlanDraftError = e.toString();
+        trainingPlanDraftError = UserFriendlyError.piRowFlo(e);
       });
     } finally {
       if (mounted) {
@@ -383,17 +386,15 @@ class _ControlPageState extends State<ControlPage> {
   }
 
   Future<void> initializeApp() async {
-    final minimumDisplayTime = Future<void>.delayed(
-      const Duration(milliseconds: 1600),
-    );
-
     try {
-      await Future.wait([loadConfiguration(), minimumDisplayTime]);
+      await loadConfiguration();
     } finally {
       if (mounted) {
         setState(() {
           appReady = true;
         });
+
+        unawaited(loadInitialNetworkData());
       }
     }
   }
@@ -464,6 +465,73 @@ class _ControlPageState extends State<ControlPage> {
 
     resolveRecentWorkoutMatches();
     resolveTrainingHistory();
+  }
+
+  Future<void> refreshWorkoutCache() async {
+    if (!configured) {
+      return;
+    }
+
+    final now = DateTime.now();
+    final start = DateTime(now.year, now.month, now.day);
+
+    final end = now.month == 12
+        ? DateTime(now.year + 1, 2, 1)
+        : now.month == 11
+        ? DateTime(now.year + 1, 1, 1)
+        : DateTime(now.year, now.month + 2, 1);
+
+    final service = WorkoutService(
+      server: serverController.text.trim(),
+      apiKey: apiKeyController.text.trim(),
+    );
+
+    final data = await service.getWorkoutsRaw(start: start, end: end);
+
+    final rows = data['workouts'] as List<dynamic>? ?? const [];
+
+    await WorkoutCacheService().save(
+      workouts: rows.whereType<Map<String, dynamic>>().toList(),
+    );
+    if (mounted) {
+      setState(() {
+        usingWorkoutCache = false;
+        workoutCacheTimestamp = null;
+      });
+    }
+  }
+
+  Future<void> loadWorkoutCache() async {
+    final cache = await WorkoutCacheService().load();
+
+    if (cache == null || !mounted) {
+      return;
+    }
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final tomorrow = today.add(const Duration(days: 1));
+
+    final todays = cache.workouts
+        .where(
+          (workout) =>
+              !workout.start.isBefore(today) &&
+              workout.start.isBefore(tomorrow),
+        )
+        .toList();
+
+    final upcoming = cache.workouts
+        .where((workout) => !workout.start.isBefore(tomorrow))
+        .toList();
+
+    setState(() {
+      todaysWorkouts = todays;
+      upcomingWorkouts = upcoming;
+      calendarError = null;
+
+      usingWorkoutCache = true;
+      workoutCacheTimestamp = cache.cachedAt;
+    });
   }
 
   Future<void> loadWorkoutHistory() async {
@@ -587,21 +655,85 @@ class _ControlPageState extends State<ControlPage> {
           serverController.text.isNotEmpty && apiKeyController.text.isNotEmpty;
     });
 
-    if (configured) {
-      await refreshStatus();
-      startStatusTimer();
-    } else {
+    if (!configured) {
       statusTimer?.cancel();
     }
-    await loadTodaysWorkout();
-    await loadUpcomingWorkouts();
-    await loadRecentWorkouts();
-    await loadRecentActivitiesForMatching();
-    await loadWorkoutHistory();
-    await loadHistoryActivities();
-    await loadTrainingPlanDraft();
-    await loadTrainingPlanReview();
-    await loadHistoryAnalyses();
+  }
+
+  Future<bool> checkPiRowFloReachable() async {
+    if (!configured) {
+      await loadWorkoutCache();
+      return false;
+    }
+
+    try {
+      final response = await http
+          .get(
+            Uri.parse('${serverController.text}/api/status'),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 2));
+
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> loadInitialNetworkData() async {
+    if (!configured) {
+      return;
+    }
+
+    final piRowFloReachable = await checkPiRowFloReachable();
+
+    if (!mounted) {
+      return;
+    }
+
+    if (!piRowFloReachable) {
+      setState(() {
+        calendarLoading = false;
+
+        trainingPlanDraftLoading = false;
+        trainingPlanDraftError = 'PiRowFlo ist momentan nicht erreichbar.';
+
+        trainingPlanReviewLoading = false;
+        trainingPlanReviewError = 'PiRowFlo ist momentan nicht erreichbar.';
+
+        loading = false;
+        error = 'PiRowFlo ist momentan nicht erreichbar.';
+      });
+
+      await loadWorkoutCache();
+
+      // Endurain ist unabhängig von PiRowFlo und
+      // darf trotzdem aktualisiert werden.
+      await Future.wait([
+        loadRecentActivitiesForMatching(),
+        loadHistoryActivities(),
+      ]);
+
+      return;
+    }
+
+    startStatusTimer();
+
+    await Future.wait([
+      refreshStatus(),
+      loadTodaysWorkout(),
+      loadUpcomingWorkouts(),
+      loadRecentWorkouts(),
+      loadRecentActivitiesForMatching(),
+      loadWorkoutHistory(),
+      loadHistoryActivities(),
+      loadTrainingPlanDraft(),
+      loadTrainingPlanReview(),
+      loadHistoryAnalyses(),
+      refreshWorkoutCache().catchError((error) {
+        debugPrint('Workout cache refresh failed: $error');
+      }),
+    ]);
   }
 
   Future<void> saveConfiguration() async {
@@ -1007,12 +1139,16 @@ class _ControlPageState extends State<ControlPage> {
   }
 
   Future<void> openWorkoutDetail(ScheduledWorkout scheduled) async {
+    final activityId = scheduled.activity?.endurainActivityId;
+
+    final analysis = activityId != null ? historyAnalyses[activityId] : null;
+
     await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => WorkoutDetailScreen(
-          workout: scheduled.workout,
-          scheduledDate: scheduled.start,
+          scheduledWorkout: scheduled,
+          analysis: analysis,
         ),
       ),
     );
@@ -1212,9 +1348,7 @@ class _ControlPageState extends State<ControlPage> {
       if (!mounted) return;
 
       setState(() {
-        calendarError =
-            'Trainingsdaten konnten nicht '
-            'geladen werden: $e';
+        calendarError = UserFriendlyError.piRowFlo(e);
       });
     } finally {
       if (mounted) {
@@ -1639,7 +1773,16 @@ class _ControlPageState extends State<ControlPage> {
   @override
   Widget build(BuildContext context) {
     if (!appReady) {
-      return const WelcomeScreen();
+      return const Scaffold(
+        backgroundColor: Colors.black,
+        body: Center(
+          child: Image(
+            image: AssetImage('assets/icon/pirow_coach.png'),
+            width: 160,
+            height: 160,
+          ),
+        ),
+      );
     }
     return Scaffold(
       appBar: AppBar(
@@ -1712,6 +1855,8 @@ class _ControlPageState extends State<ControlPage> {
           nextWorkout: nextWorkout,
           onStartTraining: startTrainingFromHome,
           onOpenWorkout: openWorkoutDetail,
+          usingWorkoutCache: usingWorkoutCache,
+          workoutCacheTimestamp: workoutCacheTimestamp,
         ),
 
         1 => TrainingScreen(
@@ -1743,6 +1888,8 @@ class _ControlPageState extends State<ControlPage> {
           trainingPlanReview: trainingPlanReview,
           trainingPlanReviewLoading: trainingPlanReviewLoading,
           onApplyTrainingPlanReview: applyTrainingPlanReview,
+          usingWorkoutCache: usingWorkoutCache,
+          workoutCacheTimestamp: workoutCacheTimestamp,
         ),
 
         2 => CoachScreen(

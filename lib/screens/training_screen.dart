@@ -37,6 +37,8 @@ class TrainingScreen extends StatefulWidget {
   final TrainingPlanReview? trainingPlanReview;
   final bool trainingPlanReviewLoading;
   final Future<void> Function() onApplyTrainingPlanReview;
+  final bool usingWorkoutCache;
+  final DateTime? workoutCacheTimestamp;
 
   const TrainingScreen({
     super.key,
@@ -60,6 +62,8 @@ class TrainingScreen extends StatefulWidget {
     required this.trainingPlanReview,
     required this.trainingPlanReviewLoading,
     required this.onApplyTrainingPlanReview,
+    required this.usingWorkoutCache,
+    required this.workoutCacheTimestamp,
   });
 
   @override
@@ -92,6 +96,8 @@ class _TrainingScreenState extends State<TrainingScreen> {
       view: view,
       trainingPlanReview: widget.trainingPlanReview,
       trainingPlanReviewLoading: widget.trainingPlanReviewLoading,
+      usingWorkoutCache: widget.usingWorkoutCache,
+      workoutCacheTimestamp: widget.workoutCacheTimestamp,
       onViewChanged: (newView) {
         setState(() {
           view = newView;
@@ -125,6 +131,8 @@ class _TrainingContent extends StatelessWidget {
   final TrainingPlanReview? trainingPlanReview;
   final bool trainingPlanReviewLoading;
   final Future<void> Function() onApplyTrainingPlanReview;
+  final bool usingWorkoutCache;
+  final DateTime? workoutCacheTimestamp;
 
   const _TrainingContent({
     required this.todaysWorkouts,
@@ -149,6 +157,8 @@ class _TrainingContent extends StatelessWidget {
     required this.trainingPlanReview,
     required this.trainingPlanReviewLoading,
     required this.onApplyTrainingPlanReview,
+    required this.usingWorkoutCache,
+    required this.workoutCacheTimestamp,
   });
 
   String _formatHistoryDate(DateTime date) {
@@ -264,6 +274,37 @@ class _TrainingContent extends StatelessWidget {
 
                       const SizedBox(height: 12),
 
+                      if (usingWorkoutCache &&
+                          workoutCacheTimestamp != null) ...[
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.cloud_off_outlined,
+                              size: 16,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                'Offline · Trainingsplan zuletzt '
+                                'aktualisiert um '
+                                '${workoutCacheTimestamp!.hour.toString().padLeft(2, '0')}:'
+                                '${workoutCacheTimestamp!.minute.toString().padLeft(2, '0')} Uhr',
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant,
+                                    ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+
                       if (calendarLoading)
                         const Card(
                           child: Padding(
@@ -287,11 +328,13 @@ class _TrainingContent extends StatelessWidget {
                         Card(
                           child: Padding(
                             padding: const EdgeInsets.all(20),
-                            child: Text(
-                              calendarError!,
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.error,
-                              ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Icon(Icons.cloud_off_outlined),
+                                const SizedBox(width: 12),
+                                Expanded(child: Text(calendarError!)),
+                              ],
                             ),
                           ),
                         )
@@ -439,8 +482,7 @@ class _TrainingContent extends StatelessWidget {
                       else if (latestCompletedEntry != null)
                         _LatestCompletedWorkoutCard(
                           entry: latestCompletedEntry,
-                          server: server,
-                          apiKey: apiKey,
+                          onOpenWorkout: onOpenWorkout,
                         )
                       else
                         const Card(
@@ -532,6 +574,7 @@ class _TrainingContent extends StatelessWidget {
                                   : () => onLinkWorkout(
                                       trainingHistory[i].match!,
                                     ),
+                              onOpenWorkout: onOpenWorkout,
                             ),
                           ],
                         ],
@@ -821,6 +864,7 @@ class _TrainingHistoryTile extends StatelessWidget {
   final String server;
   final String apiKey;
   final Future<void> Function()? onLink;
+  final void Function(ScheduledWorkout) onOpenWorkout;
 
   const _TrainingHistoryTile({
     required this.entry,
@@ -829,6 +873,7 @@ class _TrainingHistoryTile extends StatelessWidget {
     required this.server,
     required this.apiKey,
     required this.onLink,
+    required this.onOpenWorkout,
   });
 
   Future<void> _confirmLink(
@@ -1046,16 +1091,7 @@ class _TrainingHistoryTile extends StatelessWidget {
 
       if (match?.status == RecentWorkoutMatchStatus.linked &&
           linkedActivity != null) {
-        await Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => RowingActivityDetailScreen(
-              activity: linkedActivity,
-              server: server,
-              apiKey: apiKey,
-              analysis: entry.analysis,
-            ),
-          ),
-        );
+        onOpenWorkout(match!.scheduledWorkout);
 
         return;
       }
@@ -1139,13 +1175,11 @@ class _TrainingHistoryTile extends StatelessWidget {
 
 class _LatestCompletedWorkoutCard extends StatelessWidget {
   final TrainingHistoryEntry entry;
-  final String server;
-  final String apiKey;
+  final void Function(ScheduledWorkout) onOpenWorkout;
 
   const _LatestCompletedWorkoutCard({
     required this.entry,
-    required this.server,
-    required this.apiKey,
+    required this.onOpenWorkout,
   });
 
   @override
@@ -1171,16 +1205,7 @@ class _LatestCompletedWorkoutCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => RowingActivityDetailScreen(
-                activity: activity,
-                server: server,
-                apiKey: apiKey,
-                analysis: entry.analysis,
-              ),
-            ),
-          );
+          onOpenWorkout(scheduled);
         },
         child: Padding(
           padding: const EdgeInsets.all(20),
