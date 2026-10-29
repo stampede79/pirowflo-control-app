@@ -670,7 +670,7 @@ class _ControlPageState extends State<ControlPage> {
             Uri.parse('${serverController.text}/api/status'),
             headers: headers,
           )
-          .timeout(const Duration(seconds: 2));
+          .timeout(const Duration(seconds: 5));
 
       return response.statusCode == 200;
     } catch (_) {
