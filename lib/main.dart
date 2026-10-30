@@ -34,6 +34,8 @@ import 'models/workout_analysis.dart';
 import 'services/training_history_service.dart';
 import 'screens/control_screen.dart';
 import 'services/workout_cache_service.dart';
+import 'models/pirowflo_status.dart';
+import 'services/control_service.dart';
 
 void main() {
   runApp(const PiRowFloApp());
@@ -665,14 +667,14 @@ class _ControlPageState extends State<ControlPage> {
     }
 
     try {
-      final response = await http
-          .get(
-            Uri.parse('${serverController.text}/api/status'),
-            headers: headers,
-          )
-          .timeout(const Duration(seconds: 5));
+      final service = ControlService(
+        server: serverController.text.trim(),
+        apiKey: apiKeyController.text.trim(),
+      );
 
-      return response.statusCode == 200;
+      await service.getStatus(timeout: const Duration(seconds: 5));
+
+      return true;
     } catch (_) {
       return false;
     }
@@ -861,6 +863,23 @@ class _ControlPageState extends State<ControlPage> {
     }
   }
 
+  void applyPiRowFloStatus(PiRowFloStatus status) {
+    states = Map<String, String>.from(status.states);
+
+    smartRowAvailable = status.smartRowAvailable;
+    smartRowConnected = status.smartRowConnected;
+    smartRowReady = status.smartRowReady;
+    smartRowAdapter = status.smartRowAdapter;
+
+    smartRowBluetoothAvailable = status.smartRowBluetoothAvailable;
+    smartRowBluetoothPowered = status.smartRowBluetoothPowered;
+    smartRowBluetoothSoftBlocked = status.smartRowBluetoothSoftBlocked;
+    smartRowBluetoothHardBlocked = status.smartRowBluetoothHardBlocked;
+    smartRowBluetoothAdapter = status.smartRowBluetoothAdapter;
+
+    antAvailable = status.antAvailable;
+  }
+
   Future<void> refreshStatus() async {
     if (!configured) return;
 
@@ -870,48 +889,17 @@ class _ControlPageState extends State<ControlPage> {
     });
 
     try {
-      final response = await http
-          .get(
-            Uri.parse('${serverController.text}/api/status'),
-            headers: headers,
-          )
-          .timeout(const Duration(seconds: 5));
+      final service = ControlService(
+        server: serverController.text.trim(),
+        apiKey: apiKeyController.text.trim(),
+      );
 
-      if (response.statusCode != 200) {
-        throw Exception('HTTP ${response.statusCode}');
-      }
-
-      final data = jsonDecode(response.body);
-      final profiles = data['profiles'];
-      final smartrow = data['smartrow'];
-
-      final hardware = data['hardware'];
-      final smartRowBluetooth = hardware?['smartrow_bluetooth'];
-      final antHardware = hardware?['ant'];
+      final status = await service.getStatus();
 
       if (!mounted) return;
 
       setState(() {
-        states['combined'] =
-            profiles['combined']?['state']?.toString() ?? 'UNKNOWN';
-        states['bluetooth'] =
-            profiles['bluetooth']?['state']?.toString() ?? 'UNKNOWN';
-        states['ant'] = profiles['ant']?['state']?.toString() ?? 'UNKNOWN';
-
-        smartRowAvailable = smartrow?['available'] == true;
-        smartRowConnected = smartrow?['connected'] == true;
-        smartRowReady = smartrow?['services_resolved'] == true;
-        smartRowAdapter = smartrow?['adapter']?.toString();
-
-        smartRowBluetoothAvailable = smartRowBluetooth?['available'] == true;
-        smartRowBluetoothPowered = smartRowBluetooth?['powered'] == true;
-        smartRowBluetoothSoftBlocked =
-            smartRowBluetooth?['soft_blocked'] == true;
-        smartRowBluetoothHardBlocked =
-            smartRowBluetooth?['hard_blocked'] == true;
-        smartRowBluetoothAdapter = smartRowBluetooth?['adapter']?.toString();
-
-        antAvailable = antHardware?['available'] == true;
+        applyPiRowFloStatus(status);
       });
     } catch (e) {
       if (!mounted) return;
@@ -932,48 +920,17 @@ class _ControlPageState extends State<ControlPage> {
     if (!configured) return;
 
     try {
-      final response = await http
-          .get(
-            Uri.parse('${serverController.text}/api/status'),
-            headers: headers,
-          )
-          .timeout(const Duration(seconds: 5));
+      final service = ControlService(
+        server: serverController.text.trim(),
+        apiKey: apiKeyController.text.trim(),
+      );
 
-      if (response.statusCode != 200) {
-        return;
-      }
-
-      final data = jsonDecode(response.body);
-      final profiles = data['profiles'];
-      final smartrow = data['smartrow'];
-
-      final hardware = data['hardware'];
-      final smartRowBluetooth = hardware?['smartrow_bluetooth'];
-      final antHardware = hardware?['ant'];
+      final status = await service.getStatus();
 
       if (!mounted) return;
 
       setState(() {
-        states['combined'] =
-            profiles['combined']?['state']?.toString() ?? 'UNKNOWN';
-        states['bluetooth'] =
-            profiles['bluetooth']?['state']?.toString() ?? 'UNKNOWN';
-        states['ant'] = profiles['ant']?['state']?.toString() ?? 'UNKNOWN';
-
-        smartRowAvailable = smartrow?['available'] == true;
-        smartRowConnected = smartrow?['connected'] == true;
-        smartRowReady = smartrow?['services_resolved'] == true;
-        smartRowAdapter = smartrow?['adapter']?.toString();
-
-        smartRowBluetoothAvailable = smartRowBluetooth?['available'] == true;
-        smartRowBluetoothPowered = smartRowBluetooth?['powered'] == true;
-        smartRowBluetoothSoftBlocked =
-            smartRowBluetooth?['soft_blocked'] == true;
-        smartRowBluetoothHardBlocked =
-            smartRowBluetooth?['hard_blocked'] == true;
-        smartRowBluetoothAdapter = smartRowBluetooth?['adapter']?.toString();
-
-        antAvailable = antHardware?['available'] == true;
+        applyPiRowFloStatus(status);
       });
     } catch (_) {
       // Hintergrund-Refresh soll die Oberfläche nicht mit Fehlern fluten.
@@ -1182,15 +1139,15 @@ class _ControlPageState extends State<ControlPage> {
     });
 
     try {
-      final response = await http
-          .post(Uri.parse('${serverController.text}$path'), headers: headers)
-          .timeout(const Duration(seconds: 30));
+      final service = ControlService(
+        server: serverController.text.trim(),
+        apiKey: apiKeyController.text.trim(),
+      );
 
-      if (response.statusCode != 200) {
-        throw Exception('HTTP ${response.statusCode}: ${response.body}');
-      }
+      await service.post(path);
 
       await Future.delayed(const Duration(milliseconds: 700));
+
       await refreshStatus();
     } catch (e) {
       if (!mounted) return;
