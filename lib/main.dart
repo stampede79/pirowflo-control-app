@@ -36,6 +36,7 @@ import 'services/workout_cache_service.dart';
 import 'models/pirowflo_status.dart';
 import 'services/control_service.dart';
 import 'services/coach_service.dart';
+import 'screens/rowing_activity_detail_screen.dart';
 
 void main() {
   runApp(const PiRowFloApp());
@@ -1070,6 +1071,19 @@ class _ControlPageState extends State<ControlPage> {
     }
   }
 
+  Future<void> openActivityDetail(EndurainActivity activity) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => RowingActivityDetailScreen(
+          activity: activity,
+          server: serverController.text.trim(),
+          apiKey: apiKeyController.text.trim(),
+        ),
+      ),
+    );
+  }
+
   Future<void> openWorkoutDetail(ScheduledWorkout scheduled) async {
     final activityId = scheduled.activity?.endurainActivityId;
 
@@ -1775,9 +1789,7 @@ class _ControlPageState extends State<ControlPage> {
           trainingHistory: trainingHistory,
           calendarLoading: calendarLoading,
           calendarError: calendarError,
-          endurainServer: endurainServerController.text.trim(),
-          server: serverController.text.trim(),
-          apiKey: apiKeyController.text.trim(),
+          onOpenActivity: openActivityDetail,
           onStartWorkout: startWorkout,
           historyLoadingMore: historyLoadingMore,
           onLoadMoreHistory: loadMoreHistory,

@@ -6,7 +6,6 @@ import '../widgets/section_title.dart';
 import '../widgets/water_header.dart';
 import '../models/recent_workout_match.dart';
 import '../models/endurain_activity.dart';
-import 'rowing_activity_detail_screen.dart';
 import '../models/training_history_entry.dart';
 import '../models/training_plan_draft.dart';
 import 'training_plan_draft_screen.dart';
@@ -25,9 +24,6 @@ class TrainingScreen extends StatefulWidget {
   final void Function(ScheduledWorkout) onOpenWorkout;
   final List<TrainingHistoryEntry> trainingHistory;
   final Future<void> Function(RecentWorkoutMatch) onLinkWorkout;
-  final String endurainServer;
-  final String server;
-  final String apiKey;
   final bool historyLoadingMore;
   final Future<void> Function() onLoadMoreHistory;
   final bool historyHasMore;
@@ -39,6 +35,7 @@ class TrainingScreen extends StatefulWidget {
   final Future<void> Function() onApplyTrainingPlanReview;
   final bool usingWorkoutCache;
   final DateTime? workoutCacheTimestamp;
+  final void Function(EndurainActivity) onOpenActivity;
 
   const TrainingScreen({
     super.key,
@@ -50,9 +47,6 @@ class TrainingScreen extends StatefulWidget {
     required this.onOpenWorkout,
     required this.trainingHistory,
     required this.onLinkWorkout,
-    required this.endurainServer,
-    required this.server,
-    required this.apiKey,
     required this.historyLoadingMore,
     required this.onLoadMoreHistory,
     required this.historyHasMore,
@@ -64,6 +58,7 @@ class TrainingScreen extends StatefulWidget {
     required this.onApplyTrainingPlanReview,
     required this.usingWorkoutCache,
     required this.workoutCacheTimestamp,
+    required this.onOpenActivity,
   });
 
   @override
@@ -84,9 +79,6 @@ class _TrainingScreenState extends State<TrainingScreen> {
       onOpenWorkout: widget.onOpenWorkout,
       trainingHistory: widget.trainingHistory,
       onLinkWorkout: widget.onLinkWorkout,
-      endurainServer: widget.endurainServer,
-      server: widget.server,
-      apiKey: widget.apiKey,
       historyLoadingMore: widget.historyLoadingMore,
       onLoadMoreHistory: widget.onLoadMoreHistory,
       historyHasMore: widget.historyHasMore,
@@ -104,6 +96,7 @@ class _TrainingScreenState extends State<TrainingScreen> {
         });
       },
       onApplyTrainingPlanReview: widget.onApplyTrainingPlanReview,
+      onOpenActivity: widget.onOpenActivity,
     );
   }
 }
@@ -117,9 +110,6 @@ class _TrainingContent extends StatelessWidget {
   final void Function(ScheduledWorkout) onOpenWorkout;
   final List<TrainingHistoryEntry> trainingHistory;
   final Future<void> Function(RecentWorkoutMatch) onLinkWorkout;
-  final String endurainServer;
-  final String server;
-  final String apiKey;
   final bool historyLoadingMore;
   final Future<void> Function() onLoadMoreHistory;
   final bool historyHasMore;
@@ -133,6 +123,7 @@ class _TrainingContent extends StatelessWidget {
   final Future<void> Function() onApplyTrainingPlanReview;
   final bool usingWorkoutCache;
   final DateTime? workoutCacheTimestamp;
+  final void Function(EndurainActivity) onOpenActivity;
 
   const _TrainingContent({
     required this.todaysWorkouts,
@@ -143,9 +134,6 @@ class _TrainingContent extends StatelessWidget {
     required this.onOpenWorkout,
     required this.trainingHistory,
     required this.onLinkWorkout,
-    required this.endurainServer,
-    required this.server,
-    required this.apiKey,
     required this.historyLoadingMore,
     required this.onLoadMoreHistory,
     required this.historyHasMore,
@@ -159,6 +147,7 @@ class _TrainingContent extends StatelessWidget {
     required this.onApplyTrainingPlanReview,
     required this.usingWorkoutCache,
     required this.workoutCacheTimestamp,
+    required this.onOpenActivity,
   });
 
   String _formatHistoryDate(DateTime date) {
@@ -566,15 +555,13 @@ class _TrainingContent extends StatelessWidget {
                               formattedDate: _formatHistoryDate(
                                 trainingHistory[i].date,
                               ),
-                              endurainServer: endurainServer,
-                              server: server,
-                              apiKey: apiKey,
                               onLink: trainingHistory[i].match == null
                                   ? null
                                   : () => onLinkWorkout(
                                       trainingHistory[i].match!,
                                     ),
                               onOpenWorkout: onOpenWorkout,
+                              onOpenActivity: onOpenActivity,
                             ),
                           ],
                         ],
@@ -860,20 +847,16 @@ class _TrainingPlanDraftTile extends StatelessWidget {
 class _TrainingHistoryTile extends StatelessWidget {
   final TrainingHistoryEntry entry;
   final String formattedDate;
-  final String endurainServer;
-  final String server;
-  final String apiKey;
   final Future<void> Function()? onLink;
   final void Function(ScheduledWorkout) onOpenWorkout;
+  final void Function(EndurainActivity) onOpenActivity;
 
   const _TrainingHistoryTile({
     required this.entry,
     required this.formattedDate,
-    required this.endurainServer,
-    required this.server,
-    required this.apiKey,
     required this.onLink,
     required this.onOpenWorkout,
+    required this.onOpenActivity,
   });
 
   Future<void> _confirmLink(
@@ -1075,16 +1058,7 @@ class _TrainingHistoryTile extends StatelessWidget {
 
     Future<void> handleTap() async {
       if (isFree && freeActivity != null) {
-        await Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => RowingActivityDetailScreen(
-              activity: freeActivity,
-              server: server,
-              apiKey: apiKey,
-            ),
-          ),
-        );
-
+        onOpenActivity(freeActivity);
         return;
       }
 
