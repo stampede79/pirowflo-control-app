@@ -11,10 +11,12 @@ class ActivityStreamService {
   const ActivityStreamService({required this.server, required this.apiKey});
 
   Future<List<EndurainStream>> getActivityStreams(int activityId) async {
-    final response = await http.get(
-      Uri.parse('$server/api/activities/$activityId/streams'),
-      headers: {'X-API-Key': apiKey},
-    );
+    final response = await http
+        .get(
+          Uri.parse('$server/api/activities/$activityId/streams'),
+          headers: {'X-API-Key': apiKey},
+        )
+        .timeout(const Duration(seconds: 5));
 
     if (response.statusCode != 200) {
       throw Exception(

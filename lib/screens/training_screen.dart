@@ -1081,7 +1081,6 @@ class _TrainingHistoryTile extends StatelessWidget {
               activity: freeActivity,
               server: server,
               apiKey: apiKey,
-              analysis: entry.analysis,
             ),
           ),
         );

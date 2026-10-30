@@ -1141,12 +1141,26 @@ class _ControlPageState extends State<ControlPage> {
 
     final analysis = activityId != null ? historyAnalyses[activityId] : null;
 
+    EndurainActivity? endurainActivity;
+
+    if (activityId != null) {
+      for (final activity in historyActivities) {
+        if (activity.id == activityId) {
+          endurainActivity = activity;
+          break;
+        }
+      }
+    }
+
     await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => WorkoutDetailScreen(
           scheduledWorkout: scheduled,
           analysis: analysis,
+          endurainActivity: endurainActivity,
+          server: serverController.text.trim(),
+          apiKey: apiKeyController.text.trim(),
         ),
       ),
     );

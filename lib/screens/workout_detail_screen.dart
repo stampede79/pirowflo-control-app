@@ -5,15 +5,23 @@ import '../models/workout.dart';
 import '../models/workout_analysis.dart';
 import '../widgets/workout_timeline.dart';
 import '../widgets/water_header.dart';
+import '../models/endurain_activity.dart';
+import 'rowing_activity_detail_screen.dart';
 
 class WorkoutDetailScreen extends StatelessWidget {
   final ScheduledWorkout scheduledWorkout;
   final WorkoutAnalysis? analysis;
+  final EndurainActivity? endurainActivity;
+  final String server;
+  final String apiKey;
 
   const WorkoutDetailScreen({
     super.key,
     required this.scheduledWorkout,
     this.analysis,
+    this.endurainActivity,
+    required this.server,
+    required this.apiKey,
   });
 
   Workout get workout => scheduledWorkout.workout;
@@ -198,6 +206,25 @@ class WorkoutDetailScreen extends StatelessWidget {
                           : '–',
                       label: 'Ø Schlagrate',
                     ),
+                    if (endurainActivity != null) ...[
+                      const SizedBox(height: 16),
+
+                      OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => RowingActivityDetailScreen(
+                                activity: endurainActivity!,
+                                server: server,
+                                apiKey: apiKey,
+                              ),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.query_stats_outlined),
+                        label: const Text('Detaillierte Aktivitätsdaten'),
+                      ),
+                    ],
                   ],
 
                   if (analysis != null) ...[
