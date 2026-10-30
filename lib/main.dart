@@ -135,6 +135,12 @@ class _ControlPageState extends State<ControlPage> {
   bool antAvailable = false;
 
   Timer? statusTimer;
+  Timer? postWorkoutRefreshTimer;
+  int postWorkoutRefreshAttempts = 0;
+  bool postWorkoutRefreshRunning = false;
+
+  static const postWorkoutRefreshInterval = Duration(seconds: 30);
+  static const postWorkoutRefreshMaxAttempts = 40;
 
   List<ScheduledWorkout> todaysWorkouts = [];
   bool calendarLoading = false;
@@ -203,6 +209,88 @@ class _ControlPageState extends State<ControlPage> {
       loadUpcomingWorkouts(),
       loadRecentWorkouts(),
     ]);
+  }
+
+  Future<void> refreshPostWorkoutData() async {
+    await Future.wait([
+      loadWorkoutHistory(),
+      loadHistoryActivities(),
+      loadHistoryAnalyses(),
+    ]);
+  }
+
+  bool hasCompletedPostWorkoutProcessing(int scheduledWorkoutId) {
+    for (final scheduled in workoutHistory) {
+      if (scheduled.id != scheduledWorkoutId) {
+        continue;
+      }
+
+      final activity = scheduled.activity;
+
+      if (activity == null) {
+        return false;
+      }
+
+      return historyAnalyses.containsKey(activity.id);
+    }
+
+    return false;
+  }
+
+  Future<void> pollPostWorkoutData(int scheduledWorkoutId) async {
+    if (postWorkoutRefreshRunning) {
+      return;
+    }
+
+    postWorkoutRefreshRunning = true;
+
+    try {
+      await refreshPostWorkoutData();
+
+      if (!mounted) {
+        stopPostWorkoutRefresh();
+        return;
+      }
+
+      if (hasCompletedPostWorkoutProcessing(scheduledWorkoutId)) {
+        stopPostWorkoutRefresh();
+      }
+    } finally {
+      postWorkoutRefreshRunning = false;
+    }
+  }
+
+  void startPostWorkoutRefresh(int scheduledWorkoutId) {
+    postWorkoutRefreshTimer?.cancel();
+    postWorkoutRefreshAttempts = 0;
+    postWorkoutRefreshRunning = false;
+
+    unawaited(pollPostWorkoutData(scheduledWorkoutId));
+
+    postWorkoutRefreshTimer = Timer.periodic(postWorkoutRefreshInterval, (
+      _,
+    ) async {
+      if (!mounted) {
+        stopPostWorkoutRefresh();
+        return;
+      }
+
+      if (postWorkoutRefreshAttempts >= postWorkoutRefreshMaxAttempts) {
+        stopPostWorkoutRefresh();
+        return;
+      }
+
+      postWorkoutRefreshAttempts++;
+
+      await pollPostWorkoutData(scheduledWorkoutId);
+    });
+  }
+
+  void stopPostWorkoutRefresh() {
+    postWorkoutRefreshTimer?.cancel();
+    postWorkoutRefreshTimer = null;
+    postWorkoutRefreshAttempts = 0;
+    postWorkoutRefreshRunning = false;
   }
 
   Future<void> loadTrainingPlanReview() async {
@@ -403,6 +491,8 @@ class _ControlPageState extends State<ControlPage> {
   @override
   void dispose() {
     statusTimer?.cancel();
+    postWorkoutRefreshTimer?.cancel();
+
     serverController.dispose();
     apiKeyController.dispose();
     endurainServerController.dispose();
@@ -1418,7 +1508,7 @@ class _ControlPageState extends State<ControlPage> {
 
     switch (choice) {
       case 'planned':
-        await startWorkout(scheduled.workout);
+        await startWorkout(scheduled.workout, scheduledWorkoutId: scheduled.id);
       case 'free':
         await startFreeWorkout();
     }
@@ -1428,7 +1518,7 @@ class _ControlPageState extends State<ControlPage> {
     await startWorkout(Workout.free());
   }
 
-  Future<void> startWorkout(Workout workout) async {
+  Future<void> startWorkout(Workout workout, {int? scheduledWorkoutId}) async {
     if (!smartRowReady) {
       final startAnyway = await showDialog<bool>(
         context: context,
@@ -1457,7 +1547,7 @@ class _ControlPageState extends State<ControlPage> {
       }
     }
 
-    await Navigator.push(
+    final completed = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
         builder: (_) => WorkoutScreen(
@@ -1467,6 +1557,10 @@ class _ControlPageState extends State<ControlPage> {
         ),
       ),
     );
+
+    if (completed == true && scheduledWorkoutId != null) {
+      startPostWorkoutRefresh(scheduledWorkoutId);
+    }
   }
 
   Future<void> changeRowingStatisticsPeriod(
@@ -1791,7 +1885,6 @@ class _ControlPageState extends State<ControlPage> {
           calendarLoading: calendarLoading,
           calendarError: calendarError,
           onOpenActivity: openActivityDetail,
-          onStartWorkout: startWorkout,
           historyLoadingMore: historyLoadingMore,
           onLoadMoreHistory: loadMoreHistory,
           historyHasMore: historyHasMore,

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../models/scheduled_workout.dart';
-import '../models/workout.dart';
 import '../widgets/section_title.dart';
 import '../widgets/water_header.dart';
 import '../models/recent_workout_match.dart';
@@ -20,7 +19,6 @@ class TrainingScreen extends StatefulWidget {
   final List<ScheduledWorkout> upcomingWorkouts;
   final bool calendarLoading;
   final String? calendarError;
-  final void Function(Workout) onStartWorkout;
   final void Function(ScheduledWorkout) onOpenWorkout;
   final List<TrainingHistoryEntry> trainingHistory;
   final Future<void> Function(RecentWorkoutMatch) onLinkWorkout;
@@ -43,7 +41,6 @@ class TrainingScreen extends StatefulWidget {
     required this.upcomingWorkouts,
     required this.calendarLoading,
     required this.calendarError,
-    required this.onStartWorkout,
     required this.onOpenWorkout,
     required this.trainingHistory,
     required this.onLinkWorkout,
@@ -75,7 +72,6 @@ class _TrainingScreenState extends State<TrainingScreen> {
       upcomingWorkouts: widget.upcomingWorkouts,
       calendarLoading: widget.calendarLoading,
       calendarError: widget.calendarError,
-      onStartWorkout: widget.onStartWorkout,
       onOpenWorkout: widget.onOpenWorkout,
       trainingHistory: widget.trainingHistory,
       onLinkWorkout: widget.onLinkWorkout,
@@ -106,7 +102,6 @@ class _TrainingContent extends StatelessWidget {
   final List<ScheduledWorkout> upcomingWorkouts;
   final bool calendarLoading;
   final String? calendarError;
-  final void Function(Workout) onStartWorkout;
   final void Function(ScheduledWorkout) onOpenWorkout;
   final List<TrainingHistoryEntry> trainingHistory;
   final Future<void> Function(RecentWorkoutMatch) onLinkWorkout;
@@ -130,7 +125,6 @@ class _TrainingContent extends StatelessWidget {
     required this.upcomingWorkouts,
     required this.calendarLoading,
     required this.calendarError,
-    required this.onStartWorkout,
     required this.onOpenWorkout,
     required this.trainingHistory,
     required this.onLinkWorkout,

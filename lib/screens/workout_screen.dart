@@ -691,7 +691,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
           const SizedBox(height: 28),
 
           FilledButton.icon(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(context, true),
             icon: const Icon(Icons.check),
             label: const Text('Training beenden'),
           ),
