@@ -4,6 +4,8 @@ import '../models/coach_overview.dart';
 import 'weekly_review_detail_screen.dart';
 import 'monthly_review_detail_screen.dart';
 import '../widgets/water_header.dart';
+import '../widgets/section_title.dart';
+import '../utils/workout_display.dart';
 
 class CoachScreen extends StatelessWidget {
   final CoachOverview? overview;
@@ -66,10 +68,6 @@ class CoachScreen extends StatelessWidget {
       'poor' => 'Schwach',
       _ => 'Unklar',
     };
-  }
-
-  String _workoutName(String name) {
-    return name.replaceFirst(RegExp(r'^Rudern\s*[–-]\s*'), '').trim();
   }
 
   String _date(DateTime date) {
@@ -189,8 +187,8 @@ class CoachScreen extends StatelessWidget {
                     overview!.pendingRecommendations.isNotEmpty) ...[
                   const SizedBox(height: 28),
 
-                  _SectionTitle(
-                    title: 'Deine Entscheidung',
+                  SectionTitle(
+                    'Deine Entscheidung',
                     icon: Icons.event_available_outlined,
                   ),
 
@@ -214,8 +212,8 @@ class CoachScreen extends StatelessWidget {
                 ],
 
                 if (weekly != null) ...[
-                  _SectionTitle(
-                    title: 'Trainingswoche',
+                  SectionTitle(
+                    'Trainingswoche',
                     icon: Icons.calendar_view_week_outlined,
                   ),
                   const SizedBox(height: 12),
@@ -309,8 +307,8 @@ class CoachScreen extends StatelessWidget {
                             if (weekly.recommendation.isNotEmpty) ...[
                               const SizedBox(height: 24),
 
-                              const _SectionTitle(
-                                title: 'Coach-Hinweis',
+                              const SectionTitle(
+                                'Coach-Hinweis',
                                 icon: Icons.lightbulb_outline,
                               ),
 
@@ -337,8 +335,8 @@ class CoachScreen extends StatelessWidget {
                   if (weekly.keyObservations.isNotEmpty) ...[
                     const SizedBox(height: 24),
 
-                    _SectionTitle(
-                      title: 'Beobachtungen',
+                    SectionTitle(
+                      'Beobachtungen',
                       icon: Icons.visibility_outlined,
                     ),
 
@@ -368,8 +366,8 @@ class CoachScreen extends StatelessWidget {
                 if (monthly != null) ...[
                   const SizedBox(height: 28),
 
-                  _SectionTitle(
-                    title: 'Trainingsmonat',
+                  SectionTitle(
+                    'Trainingsmonat',
                     icon: Icons.calendar_month_outlined,
                   ),
 
@@ -473,7 +471,7 @@ class CoachScreen extends StatelessWidget {
                 if (workout != null) ...[
                   const SizedBox(height: 28),
 
-                  _SectionTitle(title: 'Letztes Training', icon: Icons.rowing),
+                  SectionTitle('Letztes Training', icon: Icons.rowing),
 
                   const SizedBox(height: 12),
 
@@ -484,7 +482,7 @@ class CoachScreen extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            _workoutName(workout.name),
+                            workoutDisplayName(workout.name),
                             style: Theme.of(context).textTheme.titleLarge,
                           ),
 
@@ -596,24 +594,6 @@ class _CoachMetric extends StatelessWidget {
             ],
           ),
         ),
-      ],
-    );
-  }
-}
-
-class _SectionTitle extends StatelessWidget {
-  final String title;
-  final IconData icon;
-
-  const _SectionTitle({required this.title, required this.icon});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, color: Theme.of(context).colorScheme.primary),
-        const SizedBox(width: 10),
-        Text(title, style: Theme.of(context).textTheme.titleLarge),
       ],
     );
   }
