@@ -420,6 +420,7 @@ class _ControlPageState extends State<ControlPage> {
       loadRecentActivitiesForMatching(),
       loadWorkoutHistory(),
       loadHistoryActivities(),
+      loadHistoryAnalyses(),
     ]);
   }
 
