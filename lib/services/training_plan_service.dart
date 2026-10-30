@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 
 import '../models/training_plan_draft.dart';
 import '../models/training_plan_review.dart';
+import '../utils/server_url.dart';
 
 class TrainingPlanService {
   final String server;
@@ -11,8 +12,7 @@ class TrainingPlanService {
 
   const TrainingPlanService({required this.server, required this.apiKey});
 
-  String get _server =>
-      server.endsWith('/') ? server.substring(0, server.length - 1) : server;
+  String get _server => normalizeServerUrl(server);
 
   Future<TrainingPlanReview?> getReview() async {
     final response = await http

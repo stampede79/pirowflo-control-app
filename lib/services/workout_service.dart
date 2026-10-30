@@ -7,11 +7,15 @@ import '../models/scheduled_workout.dart';
 
 import 'package:flutter/foundation.dart';
 
+import '../utils/server_url.dart';
+
 class WorkoutService {
   final String server;
   final String apiKey;
 
   const WorkoutService({required this.server, required this.apiKey});
+
+  String get _server => normalizeServerUrl(server);
 
   Map<String, String> get _headers => {'X-API-Key': apiKey};
 
@@ -52,7 +56,7 @@ class WorkoutService {
     final response = await http
         .get(
           Uri.parse(
-            '$server/api/workouts'
+            '$_server/api/workouts'
             '?start=$startDate'
             '&end=$endDate',
           ),
@@ -67,7 +71,13 @@ class WorkoutService {
       );
     }
 
-    return jsonDecode(response.body) as Map<String, dynamic>;
+    final decoded = jsonDecode(response.body);
+
+    if (decoded is! Map<String, dynamic>) {
+      throw const FormatException('Ungültige Workout-Antwort');
+    }
+
+    return decoded;
   }
 
   Future<List<ApiWorkout>> getWorkouts({
@@ -91,7 +101,7 @@ class WorkoutService {
     final response = await http
         .post(
           Uri.parse(
-            '$server/api/workouts/'
+            '$_server/api/workouts/'
             '$workoutId/activity-link',
           ),
           headers: {..._headers, 'Content-Type': 'application/json'},

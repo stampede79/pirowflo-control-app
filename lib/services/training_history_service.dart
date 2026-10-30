@@ -3,12 +3,15 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../models/workout_analysis.dart';
+import '../utils/server_url.dart';
 
 class TrainingHistoryService {
   final String server;
   final String apiKey;
 
   const TrainingHistoryService({required this.server, required this.apiKey});
+
+  String get _server => normalizeServerUrl(server);
 
   Future<Map<int, WorkoutAnalysis>> getAnalyses({
     required DateTime start,
@@ -20,7 +23,7 @@ class TrainingHistoryService {
     final response = await http
         .get(
           Uri.parse(
-            '$server/api/training-history'
+            '$_server/api/training-history'
             '?start=$startDate'
             '&end=$endDate',
           ),
@@ -32,8 +35,13 @@ class TrainingHistoryService {
       throw Exception('HTTP ${response.statusCode}: ${response.body}');
     }
 
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
-    final entries = data['entries'] as List<dynamic>? ?? const [];
+    final decoded = jsonDecode(response.body);
+
+    if (decoded is! Map<String, dynamic>) {
+      throw const FormatException('Ungültige Trainingshistorie-Antwort');
+    }
+
+    final entries = decoded['entries'] as List<dynamic>? ?? const [];
 
     final result = <int, WorkoutAnalysis>{};
 

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../models/pirowflo_status.dart';
+import '../utils/server_url.dart';
 
 class ControlService {
   final String server;
@@ -10,8 +11,7 @@ class ControlService {
 
   const ControlService({required this.server, required this.apiKey});
 
-  String get _server =>
-      server.endsWith('/') ? server.substring(0, server.length - 1) : server;
+  String get _server => normalizeServerUrl(server);
 
   Map<String, String> get _headers => {'X-API-Key': apiKey};
 

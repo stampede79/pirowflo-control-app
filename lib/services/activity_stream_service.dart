@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../models/endurain_stream.dart';
+import '../utils/server_url.dart';
 
 class ActivityStreamService {
   final String server;
@@ -10,10 +11,12 @@ class ActivityStreamService {
 
   const ActivityStreamService({required this.server, required this.apiKey});
 
+  String get _server => normalizeServerUrl(server);
+
   Future<List<EndurainStream>> getActivityStreams(int activityId) async {
     final response = await http
         .get(
-          Uri.parse('$server/api/activities/$activityId/streams'),
+          Uri.parse('$_server/api/activities/$activityId/streams'),
           headers: {'X-API-Key': apiKey},
         )
         .timeout(const Duration(seconds: 5));
