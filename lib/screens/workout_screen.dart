@@ -937,87 +937,79 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                     child: Column(
                       children: [
                         Expanded(
-                          child: Row(
+                          child: Stack(
+                            fit: StackFit.expand,
                             children: [
-                              Expanded(
-                                child: Column(
+                              if (!widget.workout.isFree)
+                                Align(
+                                  alignment: Alignment.centerRight,
+                                  child: SizedBox(
+                                    width: 170,
+                                    child: _WorkoutTimeline(
+                                      steps: widget.workout.steps,
+                                      currentStepIndex: currentStepIndex,
+                                    ),
+                                  ),
+                                ),
+
+                              Align(
+                                alignment: const Alignment(0, -0.25),
+                                child: Stack(
+                                  clipBehavior: Clip.none,
                                   children: [
-                                    Expanded(
-                                      child: Center(
-                                        child: Stack(
-                                          clipBehavior: Clip.none,
-                                          children: [
-                                            WorkoutPowerGauge(
-                                              size: 360,
-                                              progress: progress,
-                                              powerW: hasMetrics
-                                                  ? metrics!.powerW
-                                                  : 0,
-                                              targetPowerMin:
-                                                  step.targetPowerMin,
-                                              targetPowerMax:
-                                                  step.targetPowerMax,
-                                              powerColor: hasMetrics
-                                                  ? powerColor(
-                                                      context,
-                                                      step,
-                                                      metrics!,
-                                                    )
-                                                  : colors.primary,
-                                            ),
+                                    WorkoutPowerGauge(
+                                      size: 360,
+                                      progress: progress,
+                                      powerW: hasMetrics ? metrics!.powerW : 0,
+                                      targetPowerMin: step.targetPowerMin,
+                                      targetPowerMax: step.targetPowerMax,
+                                      powerColor: hasMetrics
+                                          ? powerColor(context, step, metrics!)
+                                          : colors.primary,
+                                    ),
 
-                                            Positioned(
-                                              right: -8,
-                                              bottom: -8,
-                                              child: IconButton.filledTonal(
-                                                onPressed: hasMetrics
-                                                    ? resetSmartRow
-                                                    : null,
-                                                tooltip:
-                                                    'SmartRow zurücksetzen',
-                                                icon: const Icon(Icons.refresh),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
+                                    Positioned(
+                                      left: -8,
+                                      bottom: -8,
+                                      child: IconButton.filledTonal(
+                                        onPressed: hasMetrics
+                                            ? resetSmartRow
+                                            : null,
+                                        tooltip: 'SmartRow zurücksetzen',
+                                        icon: const Icon(Icons.refresh),
                                       ),
-                                    ),
-
-                                    const SizedBox(height: 12),
-
-                                    Text(
-                                      formatDuration(remaining),
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .displayMedium
-                                          ?.copyWith(
-                                            fontWeight: FontWeight.w800,
-                                          ),
-                                    ),
-
-                                    Text(
-                                      widget.workout.isFree
-                                          ? 'Trainingszeit'
-                                          : 'verbleibend',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleMedium,
                                     ),
                                   ],
                                 ),
                               ),
 
-                              if (!widget.workout.isFree) ...[
-                                const SizedBox(width: 20),
-
-                                SizedBox(
-                                  width: 220,
-                                  child: _WorkoutTimeline(
-                                    steps: widget.workout.steps,
-                                    currentStepIndex: currentStepIndex,
+                              IgnorePointer(
+                                child: Align(
+                                  alignment: const Alignment(0, 0.88),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        formatDuration(remaining),
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .displayMedium
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.w800,
+                                            ),
+                                      ),
+                                      Text(
+                                        widget.workout.isFree
+                                            ? 'Trainingszeit'
+                                            : 'verbleibend',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleMedium,
+                                      ),
+                                    ],
                                   ),
                                 ),
-                              ],
+                              ),
                             ],
                           ),
                         ),
@@ -1582,6 +1574,8 @@ class _WorkoutTimeline extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final compact = steps.length <= 6;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
       child: Column(
@@ -1596,18 +1590,37 @@ class _WorkoutTimeline extends StatelessWidget {
           const SizedBox(height: 6),
 
           Expanded(
-            child: Column(
-              children: [
-                for (var index = 0; index < steps.length; index++)
-                  Expanded(
-                    child: _WorkoutTimelineStep(
-                      label: _labelFor(index),
-                      completed: index < currentStepIndex,
-                      current: index == currentStepIndex,
-                      showLine: index < steps.length - 1,
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: compact
+                  ? Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        for (var index = 0; index < steps.length; index++)
+                          SizedBox(
+                            height: 48,
+                            child: _WorkoutTimelineStep(
+                              label: _labelFor(index),
+                              completed: index < currentStepIndex,
+                              current: index == currentStepIndex,
+                              showLine: index < steps.length - 1,
+                            ),
+                          ),
+                      ],
+                    )
+                  : Column(
+                      children: [
+                        for (var index = 0; index < steps.length; index++)
+                          Expanded(
+                            child: _WorkoutTimelineStep(
+                              label: _labelFor(index),
+                              completed: index < currentStepIndex,
+                              current: index == currentStepIndex,
+                              showLine: index < steps.length - 1,
+                            ),
+                          ),
+                      ],
                     ),
-                  ),
-              ],
             ),
           ),
         ],
