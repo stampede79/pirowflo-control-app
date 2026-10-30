@@ -153,12 +153,14 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   void dispose() {
     timer?.cancel();
     metricsTimer?.cancel();
+    startCountdownTimer?.cancel();
+
+    heartRateSubscription?.cancel();
+    heartRateStatusSubscription?.cancel();
+    heartRateService.dispose();
 
     audioPlayer.dispose();
     WakelockPlus.disable();
-    startCountdownTimer?.cancel();
-
-    heartRateService.dispose();
 
     super.dispose();
   }
