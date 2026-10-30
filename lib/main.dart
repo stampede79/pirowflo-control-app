@@ -36,6 +36,7 @@ import 'screens/control_screen.dart';
 import 'services/workout_cache_service.dart';
 import 'models/pirowflo_status.dart';
 import 'services/control_service.dart';
+import 'services/coach_service.dart';
 
 void main() {
   runApp(const PiRowFloApp());
@@ -819,24 +820,12 @@ class _ControlPageState extends State<ControlPage> {
     });
 
     try {
-      final response = await http
-          .get(
-            Uri.parse('${serverController.text}/api/coach/overview'),
-            headers: headers,
-          )
-          .timeout(const Duration(seconds: 10));
+      final service = CoachService(
+        server: serverController.text.trim(),
+        apiKey: apiKeyController.text.trim(),
+      );
 
-      if (response.statusCode != 200) {
-        throw Exception('HTTP ${response.statusCode}');
-      }
-
-      final data = jsonDecode(response.body);
-
-      if (data is! Map<String, dynamic>) {
-        throw const FormatException('Ungültige Coach-Antwort');
-      }
-
-      final overview = CoachOverview.fromJson(data);
+      final overview = await service.getOverview();
 
       if (!mounted) {
         return;
@@ -1253,24 +1242,12 @@ class _ControlPageState extends State<ControlPage> {
     int recommendationId,
     String decision,
   ) async {
-    final response = await http
-        .post(
-          Uri.parse(
-            '${serverController.text}'
-            '/api/coach/recommendations/'
-            '$recommendationId/decision',
-          ),
-          headers: {...headers, 'Content-Type': 'application/json'},
-          body: jsonEncode({'decision': decision}),
-        )
-        .timeout(const Duration(seconds: 20));
+    final service = CoachService(
+      server: serverController.text.trim(),
+      apiKey: apiKeyController.text.trim(),
+    );
 
-    if (response.statusCode != 200) {
-      throw Exception(
-        'HTTP ${response.statusCode}: '
-        '${response.body}',
-      );
-    }
+    await service.decideRecommendation(recommendationId, decision);
 
     await loadCoachOverview();
   }
@@ -1522,24 +1499,12 @@ class _ControlPageState extends State<ControlPage> {
   }
 
   Future<void> answerAvailability(int recommendationId, String status) async {
-    final response = await http
-        .post(
-          Uri.parse(
-            '${serverController.text}'
-            '/api/coach/recommendations/'
-            '$recommendationId/availability',
-          ),
-          headers: {...headers, 'Content-Type': 'application/json'},
-          body: jsonEncode({'status': status}),
-        )
-        .timeout(const Duration(seconds: 10));
+    final service = CoachService(
+      server: serverController.text.trim(),
+      apiKey: apiKeyController.text.trim(),
+    );
 
-    if (response.statusCode != 200) {
-      throw Exception(
-        'HTTP ${response.statusCode}: '
-        '${response.body}',
-      );
-    }
+    await service.answerAvailability(recommendationId, status);
 
     await loadCoachOverview();
   }
