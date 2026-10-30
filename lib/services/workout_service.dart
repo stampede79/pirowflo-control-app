@@ -84,6 +84,31 @@ class WorkoutService {
         .toList();
   }
 
+  Future<void> linkActivity({
+    required int workoutId,
+    required int endurainActivityId,
+  }) async {
+    final response = await http
+        .post(
+          Uri.parse(
+            '$server/api/workouts/'
+            '$workoutId/activity-link',
+          ),
+          headers: {..._headers, 'Content-Type': 'application/json'},
+          body: jsonEncode({'endurain_activity_id': endurainActivityId}),
+        )
+        .timeout(const Duration(seconds: 20));
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(
+        'Aktivität konnte nicht mit dem Training '
+        'verknüpft werden '
+        '(HTTP ${response.statusCode}): '
+        '${response.body}',
+      );
+    }
+  }
+
   String _formatDate(DateTime date) {
     return '${date.year.toString().padLeft(4, '0')}-'
         '${date.month.toString().padLeft(2, '0')}-'

@@ -4,7 +4,6 @@ import 'dart:convert';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:http/http.dart' as http;
 
 import 'screens/workout_screen.dart';
 import 'models/workout.dart';
@@ -440,23 +439,12 @@ class _ControlPageState extends State<ControlPage> {
       throw Exception('PiRowFlo-Konfiguration unvollständig.');
     }
 
-    final response = await http
-        .post(
-          Uri.parse(
-            '$server/api/workouts/'
-            '$workoutId/activity-link',
-          ),
-          headers: {'X-API-Key': apiKey, 'Content-Type': 'application/json'},
-          body: jsonEncode({'endurain_activity_id': activity.id}),
-        )
-        .timeout(const Duration(seconds: 20));
+    final service = WorkoutService(server: server, apiKey: apiKey);
 
-    if (response.statusCode != 200) {
-      throw Exception(
-        'HTTP ${response.statusCode}: '
-        '${response.body}',
-      );
-    }
+    await service.linkActivity(
+      workoutId: workoutId,
+      endurainActivityId: activity.id,
+    );
 
     await Future.wait([
       loadTodaysWorkout(),
