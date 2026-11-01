@@ -196,7 +196,7 @@ class _TrainingContent extends StatelessWidget {
 
       if (match != null &&
           match.scheduledWorkout.isCompleted &&
-          match.linkedActivity != null) {
+          match.scheduledWorkout.activity != null) {
         latestCompletedEntry = entry;
         break;
       }
@@ -951,6 +951,7 @@ class _TrainingHistoryTile extends StatelessWidget {
     final scheduled = match?.scheduledWorkout;
     final candidateActivity = match?.candidate?.activity;
     final linkedActivity = match?.linkedActivity;
+    final persistedActivity = scheduled?.activity;
 
     final colors = Theme.of(context).colorScheme;
 
@@ -1010,12 +1011,20 @@ class _TrainingHistoryTile extends StatelessWidget {
                 '${Duration(seconds: linkedActivity.duration.round()).inMinutes} Min. · '
                 '${linkedActivity.distanceKm.toStringAsFixed(1)} km · '
                 'Ø ${linkedActivity.averagePower.toStringAsFixed(0)} W';
+          } else if (persistedActivity != null) {
+            final durationMinutes = persistedActivity.durationMinutes;
+            final distanceKm = persistedActivity.distanceKm;
+            final averagePower = persistedActivity.averagePower;
+
+            subtitle =
+                '${durationMinutes?.toStringAsFixed(0) ?? scheduled.workout.totalDuration.inMinutes.toString()} Min. · '
+                '${distanceKm?.toStringAsFixed(1) ?? '–'} km · '
+                'Ø ${averagePower?.toStringAsFixed(0) ?? '–'} W';
           } else {
             subtitle =
                 '${scheduled.workout.totalDuration.inMinutes} Min. · '
                 'mit Endurain verknüpft';
           }
-
         case RecentWorkoutMatchStatus.candidate:
           final actualMinutes = candidateActivity == null
               ? null
@@ -1046,7 +1055,7 @@ class _TrainingHistoryTile extends StatelessWidget {
     final bool interactive =
         isFree ||
         (match?.status == RecentWorkoutMatchStatus.linked &&
-            linkedActivity != null) ||
+            scheduled?.activity != null) ||
         (match?.status == RecentWorkoutMatchStatus.candidate &&
             candidateActivity != null);
 
@@ -1057,9 +1066,8 @@ class _TrainingHistoryTile extends StatelessWidget {
       }
 
       if (match?.status == RecentWorkoutMatchStatus.linked &&
-          linkedActivity != null) {
+          scheduled?.activity != null) {
         onOpenWorkout(match!.scheduledWorkout);
-
         return;
       }
 
@@ -1152,14 +1160,19 @@ class _LatestCompletedWorkoutCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final match = entry.match;
-    final activity = match?.linkedActivity;
 
-    if (match == null || activity == null) {
+    if (match == null) {
       return const SizedBox.shrink();
     }
 
     final scheduled = match.scheduledWorkout;
     final workout = scheduled.workout;
+    final activity = match.linkedActivity;
+    final persistedActivity = scheduled.activity;
+
+    if (activity == null && persistedActivity == null) {
+      return const SizedBox.shrink();
+    }
 
     final date = scheduled.start;
 
@@ -1226,10 +1239,26 @@ class _LatestCompletedWorkoutCard extends StatelessWidget {
                 spacing: 16,
                 runSpacing: 8,
                 children: [
-                  Text('${(activity.duration / 60).toStringAsFixed(1)} Min.'),
-                  Text('${activity.distanceKm.toStringAsFixed(2)} km'),
-                  Text('Ø ${activity.averagePower.round()} W'),
-                  Text('Ø HF ${activity.averageHeartRate.round()}'),
+                  Text(
+                    activity != null
+                        ? '${(activity.duration / 60).toStringAsFixed(1)} Min.'
+                        : '${persistedActivity!.durationMinutes?.toStringAsFixed(1) ?? '–'} Min.',
+                  ),
+                  Text(
+                    activity != null
+                        ? '${activity.distanceKm.toStringAsFixed(2)} km'
+                        : '${persistedActivity!.distanceKm?.toStringAsFixed(2) ?? '–'} km',
+                  ),
+                  Text(
+                    activity != null
+                        ? 'Ø ${activity.averagePower.round()} W'
+                        : 'Ø ${persistedActivity!.averagePower?.round() ?? '–'} W',
+                  ),
+                  Text(
+                    activity != null
+                        ? 'Ø HF ${activity.averageHeartRate.round()}'
+                        : 'Ø HF ${persistedActivity!.averageHr?.round() ?? '–'}',
+                  ),
                 ],
               ),
 

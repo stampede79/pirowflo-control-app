@@ -1,6 +1,7 @@
 import '../services/workout_parser.dart';
 import 'workout.dart';
 import 'scheduled_workout.dart';
+import 'endurain_activity.dart';
 
 class ApiWorkoutActivity {
   final int id;
@@ -42,6 +43,26 @@ class ApiWorkoutActivity {
       maxHr: (json['max_hr'] as num?)?.toDouble(),
       averageSpm: (json['average_spm'] as num?)?.toDouble(),
       linkStatus: json['link_status'] as String,
+    );
+  }
+
+  EndurainActivity toEndurainActivity() {
+    return EndurainActivity(
+      id: endurainActivityId,
+      name: 'Indoor-Rudern',
+      activityType: 13,
+      startTime: startTime,
+      distance: (distanceKm ?? 0) * 1000,
+      duration: (durationMinutes ?? 0) * 60,
+      averagePower: averagePower ?? 0,
+      maxPower: 0,
+      averageHeartRate: averageHr ?? 0,
+      maxHeartRate: maxHr ?? 0,
+      averageCadence: averageSpm ?? 0,
+      maxCadence: 0,
+      calories: 0,
+      normalizedPower: normalizedPower ?? 0,
+      totalCycles: 0,
     );
   }
 }

@@ -469,8 +469,9 @@ class _ControlPageState extends State<ControlPage> {
         historyActivities = activities;
       });
       resolveTrainingHistory();
-    } catch (_) {
-      // Historie darf den normalen App-Refresh nicht blockieren.
+    } catch (e, stackTrace) {
+      debugPrint('loadHistoryActivities failed: $e');
+      debugPrintStack(stackTrace: stackTrace);
     }
   }
 
@@ -1147,7 +1148,10 @@ class _ControlPageState extends State<ControlPage> {
         rowingStatisticsError = null;
         resolveRecentWorkoutMatches();
       });
-    } catch (e) {
+    } catch (e, stackTrace) {
+      debugPrint('loadRowingStatistics failed: $e');
+      debugPrintStack(stackTrace: stackTrace);
+
       if (!mounted) return;
 
       setState(() {
@@ -1190,6 +1194,8 @@ class _ControlPageState extends State<ControlPage> {
         }
       }
     }
+
+    endurainActivity ??= scheduled.activity?.toEndurainActivity();
 
     await Navigator.push(
       context,
