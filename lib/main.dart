@@ -1007,6 +1007,16 @@ class _ControlPageState extends State<ControlPage> {
     }
   }
 
+  void handleExpiredEndurainSession() {
+    if (!mounted) return;
+
+    setState(() {
+      endurainConnected = false;
+      endurainStatus = 'Endurain-Anmeldung abgelaufen. Bitte erneut anmelden.';
+      rowingSummary = null;
+    });
+  }
+
   Future<void> connectEndurain() async {
     var server = endurainServerController.text.trim();
     final username = endurainUserController.text.trim();
@@ -1153,6 +1163,17 @@ class _ControlPageState extends State<ControlPage> {
       debugPrintStack(stackTrace: stackTrace);
 
       if (!mounted) return;
+
+      if (e is EndurainSessionExpiredException) {
+        handleExpiredEndurainSession();
+
+        setState(() {
+          rowingStatisticsError =
+              'Endurain-Anmeldung abgelaufen. Bitte erneut anmelden.';
+        });
+
+        return;
+      }
 
       setState(() {
         rowingStatisticsError = UserFriendlyError.endurain(e);

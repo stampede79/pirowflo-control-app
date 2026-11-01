@@ -10,6 +10,14 @@ import '../models/endurain_summary.dart';
 import '../models/endurain_activity.dart';
 import '../models/endurain_stream.dart';
 
+class EndurainSessionExpiredException implements Exception {
+  const EndurainSessionExpiredException();
+
+  @override
+  String toString() =>
+      'Endurain-Sitzung ist abgelaufen. Bitte erneut anmelden.';
+}
+
 class EndurainService {
   final String server;
   final FlutterSecureStorage storage;
@@ -212,12 +220,8 @@ class EndurainService {
     final refreshed = await refreshStoredSession();
 
     if (!refreshed) {
-      throw Exception(
-        'Endurain-Sitzung ist abgelaufen. '
-        'Bitte erneut anmelden.',
-      );
+      throw const EndurainSessionExpiredException();
     }
-
     accessToken = await storage.read(key: 'endurainAccessToken');
 
     if (accessToken == null || accessToken.isEmpty) {
