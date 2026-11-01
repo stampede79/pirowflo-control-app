@@ -4,6 +4,7 @@ import '../models/endurain_activity.dart';
 import '../models/endurain_stream.dart';
 import '../widgets/rowing_stream_chart.dart';
 import '../services/activity_stream_service.dart';
+import '../widgets/water_header.dart';
 
 class RowingActivityDetailScreen extends StatefulWidget {
   final EndurainActivity activity;
@@ -194,193 +195,209 @@ class _RowingActivityDetailScreenState
     final cleanMaxPower = _cleanMaxPower;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Rudertraining')),
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+        bottom: false,
+        child: Column(
           children: [
-            Text(
-              widget.activity.name,
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-            const SizedBox(height: 6),
-            Text(
-              _formatDate(widget.activity.startTime),
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-
-            const SizedBox(height: 28),
-
-            Row(
+            Stack(
               children: [
-                Expanded(
-                  child: _DetailMetric(
-                    value:
-                        '${widget.activity.distanceKm.toStringAsFixed(2)} km',
-                    label: 'Distanz',
-                  ),
+                WaterHeader(
+                  height: 225,
+                  title: widget.activity.name,
+                  subtitle: _formatDate(widget.activity.startTime),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _DetailMetric(
-                    value: _formatDuration(widget.activity.duration),
-                    label: 'Dauer',
+                Positioned(
+                  top: 8,
+                  left: 8,
+                  child: IconButton.filledTonal(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                    },
+                    icon: const Icon(Icons.arrow_back),
+                    tooltip: 'Zurück',
                   ),
                 ),
               ],
             ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _DetailMetric(
+                          value:
+                              '${widget.activity.distanceKm.toStringAsFixed(2)} km',
+                          label: 'Distanz',
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _DetailMetric(
+                          value: _formatDuration(widget.activity.duration),
+                          label: 'Dauer',
+                        ),
+                      ),
+                    ],
+                  ),
 
-            const SizedBox(height: 30),
+                  const SizedBox(height: 30),
 
-            _Section(
-              title: 'Leistung',
-              icon: Icons.bolt,
-              children: [
-                _ValueRow(
-                  label: 'Ø Leistung',
-                  value: '${widget.activity.averagePower.round()} W',
-                ),
+                  _Section(
+                    title: 'Leistung',
+                    icon: Icons.bolt,
+                    children: [
+                      _ValueRow(
+                        label: 'Ø Leistung',
+                        value: '${widget.activity.averagePower.round()} W',
+                      ),
 
-                _ValueRow(
-                  label: 'Max. Leistung',
-                  value:
-                      '${(cleanMaxPower ?? widget.activity.maxPower).round()} W',
-                ),
-                _ValueRow(
-                  label: 'Normalized Power',
-                  value: '${widget.activity.normalizedPower.round()} W',
-                ),
-              ],
-            ),
+                      _ValueRow(
+                        label: 'Max. Leistung',
+                        value:
+                            '${(cleanMaxPower ?? widget.activity.maxPower).round()} W',
+                      ),
+                      _ValueRow(
+                        label: 'Normalized Power',
+                        value: '${widget.activity.normalizedPower.round()} W',
+                      ),
+                    ],
+                  ),
 
-            if (streamsLoading) ...[
-              const SizedBox(height: 18),
-              const Card(
-                child: Padding(
-                  padding: EdgeInsets.all(24),
-                  child: Center(child: CircularProgressIndicator()),
-                ),
-              ),
-            ] else if (streamsError != null) ...[
-              const SizedBox(height: 18),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(18),
-                  child: Text(
-                    streamsError!,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
+                  if (streamsLoading) ...[
+                    const SizedBox(height: 18),
+                    const Card(
+                      child: Padding(
+                        padding: EdgeInsets.all(24),
+                        child: Center(child: CircularProgressIndicator()),
+                      ),
                     ),
+                  ] else if (streamsError != null) ...[
+                    const SizedBox(height: 18),
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(18),
+                        child: Text(
+                          streamsError!,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ] else if (powerStream != null &&
+                      powerStream.points.isNotEmpty) ...[
+                    const SizedBox(height: 18),
+                    RowingStreamChart(
+                      stream: powerStream,
+                      title: 'Leistungsverlauf',
+                      unit: 'W',
+                      icon: Icons.bolt,
+                      edgeThreshold: 20,
+                      removeSpikes: true,
+                      useMedianFilter: true,
+                      chartStart: streamStart!,
+                      chartDuration: Duration(
+                        seconds: widget.activity.duration.round(),
+                      ),
+                    ),
+                  ],
+
+                  const SizedBox(height: 18),
+
+                  _Section(
+                    title: 'Rudern',
+                    icon: Icons.rowing,
+                    children: [
+                      _ValueRow(
+                        label: 'Ø Pace',
+                        value:
+                            '${_formatPace(widget.activity.pace500mSeconds)} /500 m',
+                      ),
+                      _ValueRow(
+                        label: 'Ø Schlagrate',
+                        value:
+                            '${(cleanAverageCadence ?? widget.activity.averageCadence).round()} SPM',
+                      ),
+                      _ValueRow(
+                        label: 'Max. Schlagrate',
+                        value:
+                            '${(cleanMaxCadence ?? widget.activity.maxCadence).round()} SPM',
+                      ),
+                      _ValueRow(
+                        label: 'Schläge',
+                        value: '${widget.activity.totalCycles}',
+                      ),
+                    ],
                   ),
-                ),
+                  if (cadenceStream != null &&
+                      cadenceStream.points.isNotEmpty) ...[
+                    const SizedBox(height: 18),
+                    RowingStreamChart(
+                      stream: cadenceStream,
+                      title: 'Schlagratenverlauf',
+                      unit: 'SPM',
+                      icon: Icons.rowing,
+                      edgeThreshold: 3,
+                      removeSpikes: true,
+                      useMedianFilter: true,
+                      chartStart: streamStart!,
+                      chartDuration: Duration(
+                        seconds: widget.activity.duration.round(),
+                      ),
+                    ),
+                  ],
+
+                  const SizedBox(height: 18),
+
+                  _Section(
+                    title: 'Herzfrequenz',
+                    icon: Icons.favorite_outline,
+                    children: [
+                      _ValueRow(
+                        label: 'Durchschnitt',
+                        value:
+                            '${widget.activity.averageHeartRate.round()} bpm',
+                      ),
+                      _ValueRow(
+                        label: 'Maximum',
+                        value: '${widget.activity.maxHeartRate.round()} bpm',
+                      ),
+                    ],
+                  ),
+                  if (heartRateStream != null &&
+                      heartRateStream.points.isNotEmpty) ...[
+                    const SizedBox(height: 18),
+                    RowingStreamChart(
+                      stream: heartRateStream,
+                      title: 'Herzfrequenzverlauf',
+                      unit: 'bpm',
+                      icon: Icons.favorite_outline,
+                      edgeThreshold: 40,
+                      removeSpikes: false,
+                      useMedianFilter: true,
+                      chartStart: streamStart!,
+                      chartDuration: Duration(
+                        seconds: widget.activity.duration.round(),
+                      ),
+                    ),
+                  ],
+
+                  const SizedBox(height: 18),
+
+                  _Section(
+                    title: 'Energie',
+                    icon: Icons.local_fire_department_outlined,
+                    children: [
+                      _ValueRow(
+                        label: 'Kalorien',
+                        value: '${widget.activity.calories.round()} kcal',
+                      ),
+                    ],
+                  ),
+                ],
               ),
-            ] else if (powerStream != null &&
-                powerStream.points.isNotEmpty) ...[
-              const SizedBox(height: 18),
-              RowingStreamChart(
-                stream: powerStream,
-                title: 'Leistungsverlauf',
-                unit: 'W',
-                icon: Icons.bolt,
-                edgeThreshold: 20,
-                removeSpikes: true,
-                useMedianFilter: true,
-                chartStart: streamStart!,
-                chartDuration: Duration(
-                  seconds: widget.activity.duration.round(),
-                ),
-              ),
-            ],
-
-            const SizedBox(height: 18),
-
-            _Section(
-              title: 'Rudern',
-              icon: Icons.rowing,
-              children: [
-                _ValueRow(
-                  label: 'Ø Pace',
-                  value:
-                      '${_formatPace(widget.activity.pace500mSeconds)} /500 m',
-                ),
-                _ValueRow(
-                  label: 'Ø Schlagrate',
-                  value:
-                      '${(cleanAverageCadence ?? widget.activity.averageCadence).round()} SPM',
-                ),
-                _ValueRow(
-                  label: 'Max. Schlagrate',
-                  value:
-                      '${(cleanMaxCadence ?? widget.activity.maxCadence).round()} SPM',
-                ),
-                _ValueRow(
-                  label: 'Schläge',
-                  value: '${widget.activity.totalCycles}',
-                ),
-              ],
-            ),
-            if (cadenceStream != null && cadenceStream.points.isNotEmpty) ...[
-              const SizedBox(height: 18),
-              RowingStreamChart(
-                stream: cadenceStream,
-                title: 'Schlagratenverlauf',
-                unit: 'SPM',
-                icon: Icons.rowing,
-                edgeThreshold: 3,
-                removeSpikes: true,
-                useMedianFilter: true,
-                chartStart: streamStart!,
-                chartDuration: Duration(
-                  seconds: widget.activity.duration.round(),
-                ),
-              ),
-            ],
-
-            const SizedBox(height: 18),
-
-            _Section(
-              title: 'Herzfrequenz',
-              icon: Icons.favorite_outline,
-              children: [
-                _ValueRow(
-                  label: 'Durchschnitt',
-                  value: '${widget.activity.averageHeartRate.round()} bpm',
-                ),
-                _ValueRow(
-                  label: 'Maximum',
-                  value: '${widget.activity.maxHeartRate.round()} bpm',
-                ),
-              ],
-            ),
-            if (heartRateStream != null &&
-                heartRateStream.points.isNotEmpty) ...[
-              const SizedBox(height: 18),
-              RowingStreamChart(
-                stream: heartRateStream,
-                title: 'Herzfrequenzverlauf',
-                unit: 'bpm',
-                icon: Icons.favorite_outline,
-                edgeThreshold: 40,
-                removeSpikes: false,
-                useMedianFilter: true,
-                chartStart: streamStart!,
-                chartDuration: Duration(
-                  seconds: widget.activity.duration.round(),
-                ),
-              ),
-            ],
-
-            const SizedBox(height: 18),
-
-            _Section(
-              title: 'Energie',
-              icon: Icons.local_fire_department_outlined,
-              children: [
-                _ValueRow(
-                  label: 'Kalorien',
-                  value: '${widget.activity.calories.round()} kcal',
-                ),
-              ],
             ),
           ],
         ),
