@@ -472,6 +472,10 @@ class _ControlPageState extends State<ControlPage> {
     } catch (e, stackTrace) {
       debugPrint('loadHistoryActivities failed: $e');
       debugPrintStack(stackTrace: stackTrace);
+
+      if (e is EndurainSessionExpiredException) {
+        handleExpiredEndurainSession();
+      }
     }
   }
 
@@ -1115,9 +1119,13 @@ class _ControlPageState extends State<ControlPage> {
       });
 
       resolveRecentWorkoutMatches();
-    } catch (_) {
-      // Matching darf den normalen App-Refresh nicht blockieren.
-      // Die Statistikseite zeigt ihre eigenen Endurain-Fehler weiterhin separat.
+    } catch (e, stackTrace) {
+      debugPrint('loadRecentActivitiesForMatching failed: $e');
+      debugPrintStack(stackTrace: stackTrace);
+
+      if (e is EndurainSessionExpiredException) {
+        handleExpiredEndurainSession();
+      }
     }
   }
 
