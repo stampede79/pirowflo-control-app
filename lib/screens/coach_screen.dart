@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../models/coach_overview.dart';
-import 'weekly_review_detail_screen.dart';
-import 'monthly_review_detail_screen.dart';
 import '../widgets/water_header.dart';
 import '../widgets/section_title.dart';
 import '../utils/workout_display.dart';
 
-class CoachScreen extends StatelessWidget {
+enum CoachView { current, week, month }
+
+class CoachScreen extends StatefulWidget {
   final CoachOverview? overview;
   final bool loading;
   final String? error;
@@ -15,6 +15,7 @@ class CoachScreen extends StatelessWidget {
 
   final Future<void> Function(int recommendationId, String status)
   onAnswerAvailability;
+
   final Future<void> Function(int recommendationId, String decision)
   onDecideRecommendation;
 
@@ -27,6 +28,13 @@ class CoachScreen extends StatelessWidget {
     required this.onAnswerAvailability,
     required this.onDecideRecommendation,
   });
+
+  @override
+  State<CoachScreen> createState() => _CoachScreenState();
+}
+
+class _CoachScreenState extends State<CoachScreen> {
+  CoachView view = CoachView.current;
 
   String _monthLabel(int month, int year) {
     const months = [
@@ -70,17 +78,36 @@ class CoachScreen extends StatelessWidget {
     };
   }
 
+  String _progression(String? value) {
+    return switch (value) {
+      'positive' => 'Positiv',
+      'stable' => 'Stabil',
+      'concerning' => 'Auffällig',
+      'unclear' => 'Noch unklar',
+      _ => 'Unklar',
+    };
+  }
+
   String _date(DateTime date) {
     return '${date.day.toString().padLeft(2, '0')}.'
         '${date.month.toString().padLeft(2, '0')}.'
         '${date.year}';
   }
 
-  String _assessment(String? value) {
+  String _weeklyAssessment(String? value) {
     return switch (value) {
       'good' => 'Gute Woche',
       'mixed' => 'Gemischte Woche',
       'concerning' => 'Auffällige Woche',
+      _ => 'Noch keine Bewertung',
+    };
+  }
+
+  String _monthlyAssessment(String? value) {
+    return switch (value) {
+      'good' => 'Guter Monat',
+      'mixed' => 'Gemischter Monat',
+      'concerning' => 'Auffälliger Monat',
       _ => 'Noch keine Bewertung',
     };
   }
@@ -123,11 +150,11 @@ class CoachScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (loading && overview == null) {
+    if (widget.loading && widget.overview == null) {
       return const Center(child: CircularProgressIndicator());
     }
 
-    if (error != null && overview == null) {
+    if (widget.error != null && widget.overview == null) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -145,7 +172,7 @@ class CoachScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
                   FilledButton.icon(
-                    onPressed: onRefresh,
+                    onPressed: widget.onRefresh,
                     icon: const Icon(Icons.refresh),
                     label: const Text('Erneut versuchen'),
                   ),
@@ -157,9 +184,29 @@ class CoachScreen extends StatelessWidget {
       );
     }
 
-    final weekly = overview?.weeklyReview;
-    final workout = overview?.latestWorkoutAnalysis;
-    final monthly = overview?.monthlyReview;
+    final weekly = widget.overview?.weeklyReview;
+    final workout = widget.overview?.latestWorkoutAnalysis;
+    final monthly = widget.overview?.monthlyReview;
+
+    final actionableRecommendations =
+        widget.overview?.pendingRecommendations
+            .where(
+              (recommendation) =>
+                  recommendation.type == 'availability_conflict' ||
+                  recommendation.type == 'workout_replanning',
+            )
+            .toList() ??
+        const <CoachRecommendation>[];
+
+    final hasCurrentContent =
+        workout != null ||
+        (widget.overview?.pendingRecommendations.isNotEmpty ?? false);
+
+    final showEmptyState = switch (view) {
+      CoachView.current => !hasCurrentContent,
+      CoachView.week => weekly == null,
+      CoachView.month => monthly == null,
+    };
 
     return Column(
       children: [
@@ -169,22 +216,55 @@ class CoachScreen extends StatelessWidget {
           subtitle: 'Analyse, Entwicklung und Trainingssteuerung',
         ),
 
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
+          child: SizedBox(
+            width: double.infinity,
+            child: SegmentedButton<CoachView>(
+              segments: const [
+                ButtonSegment(
+                  value: CoachView.current,
+                  icon: Icon(Icons.auto_awesome_outlined),
+                  label: Text('Aktuell'),
+                ),
+                ButtonSegment(
+                  value: CoachView.week,
+                  icon: Icon(Icons.calendar_view_week_outlined),
+                  label: Text('Woche'),
+                ),
+                ButtonSegment(
+                  value: CoachView.month,
+                  icon: Icon(Icons.calendar_month_outlined),
+                  label: Text('Monat'),
+                ),
+              ],
+              selected: {view},
+              showSelectedIcon: false,
+              onSelectionChanged: (selection) {
+                setState(() {
+                  view = selection.first;
+                });
+              },
+            ),
+          ),
+        ),
+
         Expanded(
           child: RefreshIndicator(
-            onRefresh: onRefresh,
+            onRefresh: widget.onRefresh,
             child: ListView(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
               children: [
-                if (loading) ...[
+                if (widget.loading) ...[
                   const SizedBox(height: 16),
                   const LinearProgressIndicator(),
                 ],
 
                 const SizedBox(height: 28),
 
-                if (overview != null &&
-                    overview!.pendingRecommendations.isNotEmpty) ...[
+                if (view == CoachView.current &&
+                    actionableRecommendations.isNotEmpty) ...[
                   const SizedBox(height: 28),
 
                   SectionTitle(
@@ -194,148 +274,112 @@ class CoachScreen extends StatelessWidget {
 
                   const SizedBox(height: 12),
 
-                  for (final recommendation
-                      in overview!.pendingRecommendations) ...[
+                  for (final recommendation in actionableRecommendations) ...[
                     if (recommendation.type == 'availability_conflict')
                       _AvailabilityQuestion(
                         recommendation: recommendation,
-                        onAnswer: onAnswerAvailability,
+                        onAnswer: widget.onAnswerAvailability,
                       )
                     else if (recommendation.type == 'workout_replanning')
                       _ReplanningQuestion(
                         recommendation: recommendation,
-                        onDecision: onDecideRecommendation,
+                        onDecision: widget.onDecideRecommendation,
                       ),
 
                     const SizedBox(height: 12),
                   ],
                 ],
 
-                if (weekly != null) ...[
+                if (view == CoachView.week && weekly != null) ...[
                   SectionTitle(
-                    'Trainingswoche',
+                    'KW ${weekly.isoWeek}',
                     icon: Icons.calendar_view_week_outlined,
                   ),
+
                   const SizedBox(height: 12),
 
                   Card(
-                    clipBehavior: Clip.antiAlias,
-                    child: InkWell(
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                WeeklyReviewDetailScreen(review: weekly),
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              _StatusChip(
+                                label: _weeklyAssessment(weekly.assessment),
+                                icon: Icons.auto_awesome,
+                              ),
+                              _StatusChip(
+                                label:
+                                    'Trend: '
+                                    '${_trend(weekly.trend)}',
+                                icon: Icons.trending_up,
+                              ),
+                            ],
                           ),
-                        );
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.all(20),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    'KW ${weekly.isoWeek}',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleLarge,
-                                  ),
-                                ),
-                                _StatusChip(
-                                  label: _assessment(weekly.assessment),
-                                  icon: Icons.auto_awesome,
-                                ),
-                              ],
-                            ),
 
-                            const SizedBox(height: 20),
+                          const SizedBox(height: 20),
 
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: _CoachMetric(
-                                    label: 'Belastung',
-                                    value: _load(weekly.loadAssessment),
-                                    icon: Icons.monitor_heart_outlined,
-                                  ),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _CoachMetric(
+                                  label: 'Belastung',
+                                  value: _load(weekly.loadAssessment),
+                                  icon: Icons.monitor_heart_outlined,
                                 ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: _CoachMetric(
-                                    label: 'Regeneration',
-                                    value: _recovery(weekly.recoveryAssessment),
-                                    icon: Icons.bedtime_outlined,
-                                  ),
-                                ),
-                              ],
-                            ),
-
-                            const SizedBox(height: 16),
-
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: _CoachMetric(
-                                    label: 'Trend',
-                                    value: _trend(weekly.trend),
-                                    icon: Icons.trending_up,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: _CoachMetric(
-                                    label: 'Konsistenz',
-                                    value: _consistency(weekly.consistency),
-                                    icon: Icons.balance_outlined,
-                                  ),
-                                ),
-                              ],
-                            ),
-
-                            const SizedBox(height: 14),
-
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: Icon(
-                                Icons.chevron_right,
-                                color: Theme.of(context).colorScheme.primary,
                               ),
-                            ),
-                            if (weekly.recommendation.isNotEmpty) ...[
-                              const SizedBox(height: 24),
-
-                              const SectionTitle(
-                                'Coach-Hinweis',
-                                icon: Icons.lightbulb_outline,
-                              ),
-
-                              const SizedBox(height: 12),
-
-                              Card(
-                                child: Padding(
-                                  padding: const EdgeInsets.all(18),
-                                  child: Text(
-                                    weekly.recommendation,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodyLarge,
-                                  ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: _CoachMetric(
+                                  label: 'Regeneration',
+                                  value: _recovery(weekly.recoveryAssessment),
+                                  icon: Icons.bedtime_outlined,
                                 ),
                               ),
                             ],
-                          ],
-                        ),
+                          ),
+
+                          const SizedBox(height: 16),
+
+                          _CoachMetric(
+                            label: 'Konsistenz',
+                            value: _consistency(weekly.consistency),
+                            icon: Icons.balance_outlined,
+                          ),
+                        ],
                       ),
                     ),
                   ),
 
-                  if (weekly.keyObservations.isNotEmpty) ...[
-                    const SizedBox(height: 24),
+                  if (weekly.summary.isNotEmpty) ...[
+                    const SizedBox(height: 28),
 
-                    SectionTitle(
+                    const SectionTitle(
+                      'Wochenfazit',
+                      icon: Icons.summarize_outlined,
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Text(
+                          weekly.summary,
+                          style: Theme.of(context).textTheme.bodyLarge,
+                        ),
+                      ),
+                    ),
+                  ],
+
+                  if (weekly.keyObservations.isNotEmpty) ...[
+                    const SizedBox(height: 28),
+
+                    const SectionTitle(
                       'Beobachtungen',
                       icon: Icons.visibility_outlined,
                     ),
@@ -349,11 +393,11 @@ class CoachScreen extends StatelessWidget {
                           children: [
                             for (
                               var i = 0;
-                              i < weekly.keyObservations.length.clamp(0, 2);
+                              i < weekly.keyObservations.length;
                               i++
                             ) ...[
                               _Observation(text: weekly.keyObservations[i]),
-                              if (i == 0 && weekly.keyObservations.length > 1)
+                              if (i < weekly.keyObservations.length - 1)
                                 const Divider(height: 24),
                             ],
                           ],
@@ -361,114 +405,195 @@ class CoachScreen extends StatelessWidget {
                       ),
                     ),
                   ],
+
+                  if (weekly.recommendation.isNotEmpty) ...[
+                    const SizedBox(height: 28),
+
+                    const SectionTitle(
+                      'Coach-Empfehlung',
+                      icon: Icons.lightbulb_outline,
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    _CoachHint(text: weekly.recommendation),
+                  ],
                 ],
 
-                if (monthly != null) ...[
-                  const SizedBox(height: 28),
-
+                if (view == CoachView.month && monthly != null) ...[
                   SectionTitle(
-                    'Trainingsmonat',
+                    _monthLabel(monthly.month, monthly.year),
                     icon: Icons.calendar_month_outlined,
                   ),
 
                   const SizedBox(height: 12),
 
                   Card(
-                    clipBehavior: Clip.antiAlias,
-                    child: InkWell(
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                MonthlyReviewDetailScreen(review: monthly),
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              _StatusChip(
+                                label: _monthlyAssessment(monthly.assessment),
+                                icon: Icons.auto_awesome,
+                              ),
+                              _StatusChip(
+                                label:
+                                    'Trend: '
+                                    '${_trend(monthly.trend)}',
+                                icon: Icons.trending_up,
+                              ),
+                            ],
                           ),
-                        );
-                      },
+
+                          const SizedBox(height: 20),
+
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _CoachMetric(
+                                  label: 'Belastung',
+                                  value: _load(monthly.loadAssessment),
+                                  icon: Icons.monitor_heart_outlined,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: _CoachMetric(
+                                  label: 'Regeneration',
+                                  value: _recovery(monthly.recoveryAssessment),
+                                  icon: Icons.bedtime_outlined,
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          const SizedBox(height: 16),
+
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _CoachMetric(
+                                  label: 'Konsistenz',
+                                  value: _consistency(monthly.consistency),
+                                  icon: Icons.balance_outlined,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: _CoachMetric(
+                                  label: 'Entwicklung',
+                                  value: _progression(monthly.progression),
+                                  icon: Icons.show_chart_outlined,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  if (monthly.summary.isNotEmpty) ...[
+                    const SizedBox(height: 28),
+
+                    const SectionTitle(
+                      'Monatsfazit',
+                      icon: Icons.summarize_outlined,
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Text(
+                          monthly.summary,
+                          style: Theme.of(context).textTheme.bodyLarge,
+                        ),
+                      ),
+                    ),
+                  ],
+
+                  if (monthly.keyObservations.isNotEmpty) ...[
+                    const SizedBox(height: 28),
+
+                    const SectionTitle(
+                      'Entwicklungen',
+                      icon: Icons.insights_outlined,
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    Card(
                       child: Padding(
                         padding: const EdgeInsets.all(20),
                         child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    _monthLabel(monthly.month, monthly.year),
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleLarge,
-                                  ),
-                                ),
-                                _StatusChip(
-                                  label: _assessment(monthly.assessment),
-                                  icon: Icons.auto_awesome,
-                                ),
-                              ],
-                            ),
-
-                            const SizedBox(height: 20),
-
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: _CoachMetric(
-                                    label: 'Belastung',
-                                    value: _load(monthly.loadAssessment),
-                                    icon: Icons.monitor_heart_outlined,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: _CoachMetric(
-                                    label: 'Regeneration',
-                                    value: _recovery(
-                                      monthly.recoveryAssessment,
-                                    ),
-                                    icon: Icons.bedtime_outlined,
-                                  ),
-                                ),
-                              ],
-                            ),
-
-                            const SizedBox(height: 16),
-
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: _CoachMetric(
-                                    label: 'Trend',
-                                    value: _trend(monthly.trend),
-                                    icon: Icons.trending_up,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: _CoachMetric(
-                                    label: 'Konsistenz',
-                                    value: _consistency(monthly.consistency),
-                                    icon: Icons.balance_outlined,
-                                  ),
-                                ),
-                              ],
-                            ),
-
-                            const SizedBox(height: 14),
-
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: Icon(
-                                Icons.chevron_right,
-                                color: Theme.of(context).colorScheme.primary,
-                              ),
-                            ),
+                            for (
+                              var i = 0;
+                              i < monthly.keyObservations.length;
+                              i++
+                            ) ...[
+                              _Observation(text: monthly.keyObservations[i]),
+                              if (i < monthly.keyObservations.length - 1)
+                                const Divider(height: 24),
+                            ],
                           ],
                         ),
                       ),
                     ),
-                  ),
+                  ],
+
+                  if (monthly.strengths.isNotEmpty) ...[
+                    const SizedBox(height: 28),
+
+                    const SectionTitle(
+                      'Stärken',
+                      icon: Icons.check_circle_outline,
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    _CoachListCard(items: monthly.strengths, icon: Icons.check),
+                  ],
+
+                  if (monthly.focusAreas.isNotEmpty) ...[
+                    const SizedBox(height: 28),
+
+                    const SectionTitle(
+                      'Fokus',
+                      icon: Icons.center_focus_strong,
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    _CoachListCard(
+                      items: monthly.focusAreas,
+                      icon: Icons.arrow_forward,
+                    ),
+                  ],
+
+                  if (monthly.recommendation.isNotEmpty) ...[
+                    const SizedBox(height: 28),
+
+                    const SectionTitle(
+                      'Empfehlung',
+                      icon: Icons.lightbulb_outline,
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    _CoachHint(text: monthly.recommendation),
+                  ],
                 ],
 
-                if (workout != null) ...[
+                if (view == CoachView.current && workout != null) ...[
                   const SizedBox(height: 28),
 
                   SectionTitle('Letztes Training', icon: Icons.rowing),
@@ -540,7 +665,7 @@ class CoachScreen extends StatelessWidget {
                   ),
                 ],
 
-                if (weekly == null && monthly == null && workout == null) ...[
+                if (showEmptyState) ...[
                   Card(
                     child: Padding(
                       padding: const EdgeInsets.all(20),
@@ -734,6 +859,44 @@ class _StatusChip extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _CoachListCard extends StatelessWidget {
+  final List<String> items;
+  final IconData icon;
+
+  const _CoachListCard({required this.items, required this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          children: [
+            for (var i = 0; i < items.length; i++) ...[
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(icon, size: 18, color: colors.primary),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      items[i],
+                      style: Theme.of(context).textTheme.bodyLarge,
+                    ),
+                  ),
+                ],
+              ),
+              if (i < items.length - 1) const Divider(height: 24),
+            ],
+          ],
+        ),
       ),
     );
   }
