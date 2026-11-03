@@ -443,18 +443,7 @@ class _TrainingContent extends StatelessWidget {
                                             ),
                                           ],
                                         ),
-                                      ] else
-                                        Text(
-                                          'Details ansehen',
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .labelLarge
-                                              ?.copyWith(
-                                                color: Theme.of(context)
-                                                    .colorScheme
-                                                    .primary,
-                                              ),
-                                        ),
+                                      ],
                                     ],
                                   ),
                                 ),

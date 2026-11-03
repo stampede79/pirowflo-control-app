@@ -1102,20 +1102,17 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                                   ),
                             ),
                             const SizedBox(height: 4),
-                            Text(
-                              step.title,
-                              style: Theme.of(context).textTheme.headlineMedium
-                                  ?.copyWith(fontWeight: FontWeight.w700),
-                            ),
+                            if (!widget.workout.isFree)
+                              Text(
+                                step.title,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .headlineMedium
+                                    ?.copyWith(fontWeight: FontWeight.w700),
+                              ),
                           ],
                         ),
                       ),
-
-                      if (widget.workout.isFree)
-                        Text(
-                          'Freies Training',
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
                     ],
                   ),
 
