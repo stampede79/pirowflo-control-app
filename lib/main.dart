@@ -37,8 +37,13 @@ import 'models/pirowflo_status.dart';
 import 'services/control_service.dart';
 import 'services/coach_service.dart';
 import 'screens/rowing_activity_detail_screen.dart';
+import 'services/system_ui_service.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  await SystemUiService.configure();
+
   runApp(const PiRowFloApp());
 }
 

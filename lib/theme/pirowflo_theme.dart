@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class PiRowFloTheme {
   static const deepWater = Color(0xFF083B4C);
@@ -29,6 +30,11 @@ class PiRowFloTheme {
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         centerTitle: false,
+        systemOverlayStyle: SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: Brightness.dark,
+          statusBarBrightness: Brightness.light,
+        ),
       ),
 
       cardTheme: CardThemeData(
