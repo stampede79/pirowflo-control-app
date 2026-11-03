@@ -12,6 +12,8 @@ import '../models/workout_step_result.dart';
 import '../services/workout_step_recorder.dart';
 import '../widgets/workout_power_gauge.dart';
 import '../services/heart_rate_service.dart';
+import '../models/workout_split.dart';
+import '../services/workout_split_recorder.dart';
 
 class WorkoutScreen extends StatefulWidget {
   final Workout workout;
@@ -48,6 +50,14 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
   late WorkoutStepRecorder stepRecorder;
   final List<WorkoutStepResult> stepResults = [];
+
+  final WorkoutSplitRecorder splitRecorder = WorkoutSplitRecorder();
+
+  final List<WorkoutSplit> splits = [];
+
+  WorkoutSplit? splitPopup;
+  WorkoutSplit? queuedSplitPopup;
+  Timer? splitPopupTimer;
 
   int currentStepIndex = 0;
   late Duration remaining;
@@ -154,6 +164,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     timer?.cancel();
     metricsTimer?.cancel();
     startCountdownTimer?.cancel();
+    splitPopupTimer?.cancel();
 
     heartRateSubscription?.cancel();
     heartRateStatusSubscription?.cancel();
@@ -302,6 +313,12 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         final next = nextWorkoutStep;
 
         if (next != null) {
+          if (splitPopup != null) {
+            splitPopupTimer?.cancel();
+
+            queuedSplitPopup = splitPopup;
+            splitPopup = null;
+          }
           setState(() {
             showStepPreview = true;
             previewCountdown = remaining.inSeconds;
@@ -357,9 +374,65 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       playStepChangeSignal(currentStep.type);
     }
 
+    if (queuedSplitPopup != null) {
+      Future.delayed(const Duration(seconds: 1), () {
+        if (!mounted) {
+          return;
+        }
+
+        _showQueuedSplitPopupIfPossible();
+      });
+    }
+
     if (running) {
       timer = Timer.periodic(const Duration(seconds: 1), (_) => tick());
     }
+  }
+
+  bool get _stepPreviewHasPriority {
+    return showStepPreview || startingWorkout;
+  }
+
+  void _showQueuedSplitPopupIfPossible() {
+    if (_stepPreviewHasPriority || queuedSplitPopup == null) {
+      return;
+    }
+
+    final split = queuedSplitPopup!;
+    queuedSplitPopup = null;
+
+    _showSplitPopup(split);
+  }
+
+  void _showSplitPopup(WorkoutSplit split) {
+    splitPopupTimer?.cancel();
+
+    setState(() {
+      splitPopup = split;
+    });
+
+    splitPopupTimer = Timer(const Duration(seconds: 4), () {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        splitPopup = null;
+      });
+    });
+  }
+
+  void _handleCompletedSplit(WorkoutSplit split) {
+    setState(() {
+      splits.add(split);
+    });
+
+    if (_stepPreviewHasPriority) {
+      queuedSplitPopup = split;
+      return;
+    }
+
+    _showSplitPopup(split);
   }
 
   Future<void> loadMetrics() async {
@@ -375,6 +448,15 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
       if (running && result.smartRowReady) {
         stepRecorder.addSample(result);
+
+        final completedSplit = splitRecorder.addSample(
+          result,
+          heartRateBpm: heartRateBpm,
+        );
+
+        if (completedSplit != null) {
+          _handleCompletedSplit(completedSplit);
+        }
       }
 
       setState(() {
@@ -803,6 +885,104 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     );
   }
 
+  Widget splitPopupOverlay(BuildContext context) {
+    final split = splitPopup;
+
+    if (split == null || showStepPreview || startingWorkout) {
+      return const SizedBox.shrink();
+    }
+
+    final colors = Theme.of(context).colorScheme;
+
+    final seconds = split.pace500mSeconds.round();
+
+    final minutes = seconds ~/ 60;
+    final remainder = seconds % 60;
+
+    final pace =
+        '$minutes:'
+        '${remainder.toString().padLeft(2, '0')}';
+
+    final distance = split.distanceM < 1000
+        ? '${split.distanceM} m'
+        : '${(split.distanceM / 1000).toStringAsFixed(1)} km';
+
+    final details = <String>[
+      if (split.averagePowerW > 0) 'Ø ${split.averagePowerW.round()} W',
+      if (split.averageHeartRateBpm != null)
+        'Ø ${split.averageHeartRateBpm!.round()} HF',
+      if (split.averageSpm > 0) 'Ø ${split.averageSpm.toStringAsFixed(0)} SPM',
+    ];
+
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: Container(
+          color: const Color(0xEAF2F9FB),
+          child: SafeArea(
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(28),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      distance,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: colors.primary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+
+                    const SizedBox(height: 4),
+
+                    Text(
+                      'LETZTE 500 M',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: colors.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.4,
+                      ),
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    Text(
+                      pace,
+                      style: Theme.of(context).textTheme.displayLarge
+                          ?.copyWith(fontWeight: FontWeight.w800),
+                    ),
+
+                    Text(
+                      '/500 m',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+
+                    if (details.isNotEmpty) ...[
+                      const SizedBox(height: 26),
+                      Wrap(
+                        alignment: WrapAlignment.center,
+                        spacing: 24,
+                        runSpacing: 10,
+                        children: [
+                          for (final detail in details)
+                            Text(
+                              detail,
+                              style: Theme.of(context).textTheme.titleLarge
+                                  ?.copyWith(fontWeight: FontWeight.w600),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> resetSmartRow() async {
     if (metrics?.smartRowReady != true) {
       return;
@@ -844,6 +1024,14 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       await service.resetSmartRow();
 
       if (!mounted) return;
+      splitPopupTimer?.cancel();
+
+      setState(() {
+        splitRecorder.reset();
+        splits.clear();
+        splitPopup = null;
+        queuedSplitPopup = null;
+      });
 
       await loadMetrics();
 
@@ -940,6 +1128,13 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                           child: Stack(
                             fit: StackFit.expand,
                             children: [
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: SizedBox(
+                                  width: 170,
+                                  child: _WorkoutSplitHistory(splits: splits),
+                                ),
+                              ),
                               if (!widget.workout.isFree)
                                 Align(
                                   alignment: Alignment.centerRight,
@@ -1120,6 +1315,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
               ),
             ),
           ),
+          if (splitPopup != null) splitPopupOverlay(context),
 
           if (showStepPreview) stepPreviewOverlay(context),
         ],
@@ -1438,6 +1634,8 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                     ),
                   ),
                 ),
+                if (splitPopup != null) splitPopupOverlay(context),
+
                 if (showStepPreview) stepPreviewOverlay(context),
               ],
             ),
@@ -1911,6 +2109,78 @@ class _ResultTimelineEntry extends StatelessWidget {
           Expanded(child: child),
         ],
       ),
+    );
+  }
+}
+
+class _WorkoutSplitHistory extends StatelessWidget {
+  final List<WorkoutSplit> splits;
+
+  const _WorkoutSplitHistory({required this.splits});
+
+  String _distance(int meters) {
+    if (meters < 1000) {
+      return '$meters m';
+    }
+
+    return '${(meters / 1000).toStringAsFixed(1)} km';
+  }
+
+  String _pace(double seconds) {
+    final rounded = seconds.round();
+    final minutes = rounded ~/ 60;
+    final remainder = rounded % 60;
+
+    return '$minutes:'
+        '${remainder.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    final visible = splits.length <= 5
+        ? splits
+        : splits.sublist(splits.length - 5);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          '500-m-Splits',
+          style: Theme.of(context).textTheme.titleSmall
+              ?.copyWith(fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 10),
+
+        if (visible.isEmpty)
+          Text(
+            'Noch kein Split',
+            style: Theme.of(context).textTheme.bodySmall
+                ?.copyWith(color: colors.onSurfaceVariant),
+          )
+        else
+          for (final split in visible)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      _distance(split.distanceM),
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ),
+                  Text(
+                    _pace(split.pace500mSeconds),
+                    style: Theme.of(context).textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                ],
+              ),
+            ),
+      ],
     );
   }
 }
