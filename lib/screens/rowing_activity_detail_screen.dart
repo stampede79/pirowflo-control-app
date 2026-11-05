@@ -5,15 +5,18 @@ import '../models/endurain_stream.dart';
 import '../widgets/rowing_stream_chart.dart';
 import '../services/activity_stream_service.dart';
 import '../widgets/water_header.dart';
+import '../models/workout_analysis.dart';
 
 class RowingActivityDetailScreen extends StatefulWidget {
   final EndurainActivity activity;
+  final WorkoutAnalysis? analysis;
   final String server;
   final String apiKey;
 
   const RowingActivityDetailScreen({
     super.key,
     required this.activity,
+    this.analysis,
     required this.server,
     required this.apiKey,
   });
@@ -241,6 +244,10 @@ class _RowingActivityDetailScreenState
                       ),
                     ],
                   ),
+                  if (widget.analysis != null) ...[
+                    const SizedBox(height: 18),
+                    _CoachAnalysisSection(analysis: widget.analysis!),
+                  ],
 
                   const SizedBox(height: 30),
 
@@ -402,6 +409,98 @@ class _RowingActivityDetailScreenState
           ],
         ),
       ),
+    );
+  }
+}
+
+class _CoachAnalysisSection extends StatelessWidget {
+  final WorkoutAnalysis analysis;
+
+  const _CoachAnalysisSection({required this.analysis});
+
+  String _loadLabel(String? value) {
+    switch (value) {
+      case 'low':
+        return 'Niedrig';
+      case 'appropriate':
+        return 'Angemessen';
+      case 'high':
+        return 'Hoch';
+      default:
+        return 'Nicht beurteilbar';
+    }
+  }
+
+  String _effortLabel(String? value) {
+    switch (value) {
+      case 'easy':
+        return 'Locker';
+      case 'moderate':
+        return 'Moderat';
+      case 'hard':
+        return 'Hart';
+      default:
+        return 'Nicht beurteilbar';
+    }
+  }
+
+  String _recoveryLabel(bool? value) {
+    if (value == true) {
+      return 'Beobachten';
+    }
+
+    if (value == false) {
+      return 'Unauffällig';
+    }
+
+    return 'Nicht beurteilbar';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final recommendation = analysis.recommendation?.trim();
+
+    return _Section(
+      title: 'Coach-Analyse',
+      icon: Icons.psychology_outlined,
+      children: [
+        _ValueRow(
+          label: 'Belastung',
+          value: _loadLabel(analysis.loadAssessment),
+        ),
+        _ValueRow(label: 'Intensität', value: _effortLabel(analysis.effort)),
+        _ValueRow(
+          label: 'Regeneration',
+          value: _recoveryLabel(analysis.recoveryConcern),
+        ),
+        const SizedBox(height: 14),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            analysis.summary,
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+        ),
+        if (recommendation != null && recommendation.isNotEmpty) ...[
+          const SizedBox(height: 18),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'Empfehlung',
+              style: Theme.of(context).textTheme.titleSmall
+                  ?.copyWith(fontWeight: FontWeight.w700),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              recommendation,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ),
+        ],
+      ],
     );
   }
 }

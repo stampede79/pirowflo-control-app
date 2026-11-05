@@ -1201,11 +1201,14 @@ class _ControlPageState extends State<ControlPage> {
   }
 
   Future<void> openActivityDetail(EndurainActivity activity) async {
+    final analysis = historyAnalyses[activity.id];
+
     await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => RowingActivityDetailScreen(
           activity: activity,
+          analysis: analysis,
           server: serverController.text.trim(),
           apiKey: apiKeyController.text.trim(),
         ),
